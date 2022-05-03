@@ -77,6 +77,7 @@ namespace statemachine
 
     geometry_msgs::PoseStamped des_pose_;       // Target pose
     geometry_msgs::PoseStamped takeoff_pose_;   // Take-off pose
+    geometry_msgs::PoseStamped localtakeoff_pose_;   // Local Take-off pose
     geometry_msgs::PoseStamped current_pose_;   // Current pose 
     
     // Callback Functions

@@ -1,5 +1,12 @@
 #include <state_machine/state_machine.h>
 
+#define TAKEOFF_ALTITUDE 1.5f
+
+// TODO: Refactorize WPConvergence value
+// TODO: Add heading command and convergence checks
+// TODO: YAML file to read the waypoints
+// TODO: Geometric controller activation
+
 namespace statemachine
 {
 
@@ -45,7 +52,7 @@ namespace statemachine
 
     takeoff_pose_.pose.position.x = 0;
     takeoff_pose_.pose.position.y = 0;
-    takeoff_pose_.pose.position.z = 1.5;
+    takeoff_pose_.pose.position.z = TAKEOFF_ALTITUDE;
 
     // FCU Initialisation Sequence 
     ros::Time last_request = ros::Time::now();
@@ -127,16 +134,15 @@ namespace statemachine
     {
       // Arming sequence
       if (current_state_.armed){
-          // Switch to TAKEOFF
-          ROS_INFO("[ARMED] : Press ENTER for Take-off: ");
-          if(getInput() == 0)
-              state_ = TAKEOFF;
-          requestKeyboardInput();       
+        // Switch to TAKEOFF
+        ROS_INFO("[ARMED] : Press ENTER for Take-off: ");
+        if(getInput() == 0)
+            state_ = TAKEOFF;
+        requestKeyboardInput();       
       } else {
-          ROS_INFO("[ARMED] : Arming...");
-          setInput(100);
-          }
-      
+        ROS_INFO("[ARMED] : Arming ...");
+        setInput(100);
+        }
       }
     break;
 
@@ -144,9 +150,9 @@ namespace statemachine
     {
       // TODO add velocity convergence
       // TODO add heading convergence
-      
+     
       bool arrivedWP = false;
-      arrivedWP = WPConvergence(current_pose_, takeoff_pose_);
+      arrivedWP = WPConvergence( current_pose_, takeoff_pose_);
       
       if (arrivedWP){
         ROS_INFO("[TAKEOFF] : Take-off completed!");
@@ -154,50 +160,60 @@ namespace statemachine
             state_ = WAYPOINT;
         requestKeyboardInput(); 
       } else {
-        ROS_INFO("[TAKEOFF] : Fasten your seatbelts");
+        ROS_INFO("[TAKEOFF] : Fasten your seatbelts ...");
         setInput(100);
-      }
-
-
-          //if (reached_goal && speed_converged){
-        //      ROS_INFO("[TAKEOFF] : Take-off completed!");
-              //if(getInput() == 0)
-              //    state_ = WAYPOINT;
-              //requestKeyboardInput(); 
-          /*
-          } else {
-              ROS_INFO("[AIRBONE] : Hovering ...");
-              setInput(100);
-          }
-          */
         }
+      }
     break;
 
     case StateMachine::WAYPOINT:
     {
-      ROS_INFO("[WAYPOINT] : Changing to LANDING!");
-        
-        state_ = TRAJECTORY;
+      bool arrivedWP = false;
+      arrivedWP = WPConvergence( current_pose_, des_pose_);
+      
+      if (arrivedWP){
+        ROS_INFO("[WAYPOINT] : Waypoint reached!");
+        if(getInput() == 0)
+          state_ = TRAJECTORY;
+          requestKeyboardInput(); 
+      } else {
+        ROS_INFO("[WAYPOINT] : Fyling to WP ...");
+        setInput(100);
         }
+      }
     break;
 
     case StateMachine::TRAJECTORY:
     {
-        ROS_INFO("[WAYPOINT] : Changing to LANDING!");
-        
-        state_ = LANDING;
+      bool arrivedWP = false;
+      arrivedWP = WPConvergence( current_pose_, des_pose_);
+
+      if (arrivedWP){
+        ROS_INFO("[TRAJECTORY] : Waypoint reached!");
+        if(getInput() == 0)
+          state_ = LANDING;
+          requestKeyboardInput(); 
+      } else {
+        ROS_INFO("[TRAJECTORY] : Following trajectory ...");
+        setInput(100);
         }
+      }
     break;
     
     case StateMachine::LANDING:
     {
-        ROS_INFO("[LANDING] : Going down!");
-        
-        state_= ARMED;
+      // If the system status is not MAV_STATE_ACTIVE
+      if (current_state_.system_status == 4){
+        ROS_INFO("[LANDING] : Going down ...");
+      } else {
+        ROS_INFO("[LANDING] : Landing completed!");
         }
+      
+      }
     break;
+    
     }
-    }
+  }
   
   void StateMachine::PublishCommand()
   {
@@ -207,41 +223,59 @@ namespace statemachine
     case StateMachine::ARMED:
     {
         
-        local_pos_pub_.publish(des_pose_);
-        }
+      local_pos_pub_.publish(des_pose_);
+
+      // Take-of preparation
+      this -> localtakeoff_pose_.pose.position.x = current_pose_.pose.position.x;
+      this -> localtakeoff_pose_.pose.position.y = current_pose_.pose.position.y;
+      this -> localtakeoff_pose_.pose.position.z = TAKEOFF_ALTITUDE;
+        
+      }
     break;
 
     case StateMachine::TAKEOFF:
     {
-        // bool arrivedWP = false;
+    
+      // Go to Local Origin at take-off height
+      if (abs(current_pose_.pose.position.z - TAKEOFF_ALTITUDE) < 0.10 ){
         local_pos_pub_.publish(takeoff_pose_);
-        // arrivedWP = WPConvergence(current_pose_, takeoff_pose_);
-        
-        // if (arrivedWP){
-        //   ROS_INFO("ARRIVED");
-        // } else {
-        //   ROS_INFO("Arriving...");
-        // }
-        
+        } else {
+          // Climb to take-off altitude at current position
+          local_pos_pub_.publish(localtakeoff_pose_);
         }
+      
+      }
     break;
 
     case StateMachine::WAYPOINT:
     {
-        
-        }
+      this -> des_pose_.pose.position.x = 0;
+      this -> des_pose_.pose.position.y = 1;
+      this -> des_pose_.pose.position.z = 2.5;
+      
+      local_pos_pub_.publish(des_pose_);
+
+      }
     break;
 
     case StateMachine::TRAJECTORY:
     {
-        
-        }
+      this -> des_pose_.pose.position.x = 1;
+      this -> des_pose_.pose.position.y = 1;
+      this -> des_pose_.pose.position.z = 2.5;
+
+      local_pos_pub_.publish(des_pose_);
+      
+      }
     break;
 
     case StateMachine::LANDING:
     {
-        local_pos_pub_.publish(takeoff_pose_);
+      //local_pos_pub_.publish(takeoff_pose_);
+      if (!land_cmd_.response.success){
+        land_client_.call(land_cmd_);
         }
+      }
     break;
     }
   }
