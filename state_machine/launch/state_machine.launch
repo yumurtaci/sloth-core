@@ -1,0 +1,8 @@
+<launch>
+	<!--- State Machine -->
+	<node name="state_machine" pkg="state_machine" type="state_machine" output="screen" clear_params = "true">
+		<rosparam command="load" file="$(find state_machine)/cfg/waypoints_cfg.yaml"/>
+    </node>
+</launch>
+
+
