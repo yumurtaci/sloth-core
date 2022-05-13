@@ -47,31 +47,51 @@ BasicPlanner::BasicPlanner(ros::NodeHandle& nh) :
         max_v_(0.2),
         max_a_(0.2),
         current_velocity_(Eigen::Vector3d::Zero()),
-        current_pose_(Eigen::Affine3d::Identity()) {
-
-    // Load params
-    nh_.getParam(ros::this_node::getName() + "/dynamic_params/max_v", max_v_);
-    std::cout<<"max vel: "<<max_v_<<std::endl;
-
-    nh_.getParam(ros::this_node::getName() + "/dynamic_params/max_a", max_a_);
-    std::cout<<"max acc: "<<max_a_<<std::endl;
-
-    // create publisher for RVIZ markers
-    pub_markers_ = nh.advertise<visualization_msgs::MarkerArray>("trajectory_markers", 0);
-    pub_trajectory_ = nh.advertise<mav_planning_msgs::PolynomialTrajectory4D>("trajectory", 0);
-
-    // subscriber for Odometry
-    sub_odom_ = nh.subscribe("odom", 1, &BasicPlanner::uavOdomCallback, this);
+        current_pose_(Eigen::Affine3d::Identity()) 
+{
+    // Initialize parameters
+    planner_done_ = false;
+    
+    readParameters();
+    initializePublishers();
+    initializeSubscribers();
+    
 }
 
-// Callback to get current Pose of UAV
-void BasicPlanner::uavOdomCallback(const nav_msgs::Odometry::ConstPtr& odom) {
+void BasicPlanner::localposeCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
+{
+    tf::poseMsgToEigen(msg->pose, current_pose_);
+}
 
-    // store current position in our planner
-    tf::poseMsgToEigen(odom->pose.pose, current_pose_);
+void BasicPlanner::localvelCallback(const geometry_msgs::TwistStamped::ConstPtr &msg)
+{
+    tf::vectorMsgToEigen(msg->twist.linear, current_velocity_);
+}
 
-    // store current velocity
-    tf::vectorMsgToEigen(odom->twist.twist.linear, current_velocity_);
+void BasicPlanner::plannerTriggerCallback(const std_msgs::Bool::ConstPtr& msg){
+    planner_active_ = msg->data;
+    if (planner_active_ && !planner_done_){
+
+        mav_trajectory_generation::Trajectory trajectory;
+    
+        planTrajectory(&trajectory);
+        publishTrajectory(trajectory);
+    
+        ROS_WARN_STREAM("[PLANNER] TRAJECTORY PUBLISHED");
+        planner_done_ = true;
+    } else if (!planner_active_ && planner_done_)
+    {
+        planner_done_ = false;
+    }
+    else
+    {
+        // Waiting for the trigger IDLE for planner
+    }
+    
+}
+
+bool BasicPlanner::getActiveFlag(){
+    return planner_active_;
 }
 
 // Method to set maximum speed.
@@ -278,4 +298,30 @@ bool BasicPlanner::publishTrajectory(const mav_trajectory_generation::Trajectory
     pub_trajectory_.publish(msg);
 
     return true;
+}
+
+void BasicPlanner::initializePublishers(){
+    // Create publisher for RVIZ markers
+    pub_markers_ = nh_.advertise<visualization_msgs::MarkerArray>("trajectory_markers", 0);
+    pub_trajectory_ = nh_.advertise<mav_planning_msgs::PolynomialTrajectory4D>("trajectory", 0);
+}
+
+void BasicPlanner::initializeSubscribers(){
+    //sub_odom_ = nh_.subscribe("odom", 1, &BasicPlanner::uavOdomCallback, this);
+    
+    state_machine_sub_ = nh_.subscribe("planner_activation", 1, &BasicPlanner::plannerTriggerCallback, this);
+
+    local_pos_pose_sub_ = nh_.subscribe<geometry_msgs::PoseStamped>
+            ("mavros/local_position/pose", 10, &BasicPlanner::localposeCallback, this);
+
+    local_pos_vel_sub_ = nh_.subscribe<geometry_msgs::TwistStamped>
+            ("mavros/local_position/velocity", 10, &BasicPlanner::localvelCallback, this);
+}
+
+void BasicPlanner::readParameters(){
+    nh_.getParam(ros::this_node::getName() + "/dynamic_params/max_v", max_v_);
+    ROS_INFO("[PLANNER] Max Vel: %.1f m/s", max_v_);
+
+    nh_.getParam(ros::this_node::getName() + "/dynamic_params/max_a", max_a_);
+    ROS_INFO("[PLANNER] Max Acc: %.1f m/s^2", max_a_);
 }

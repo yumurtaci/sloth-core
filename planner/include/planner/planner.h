@@ -44,8 +44,13 @@
 
 #include <iostream>
 #include <ros/ros.h>
+
 #include <Eigen/Dense>
+
+#include <std_msgs/Bool.h>
 #include <nav_msgs/Odometry.h>
+#include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/TwistStamped.h>
 #include <eigen_conversions/eigen_msg.h>
 #include <mav_trajectory_generation/polynomial_optimization_nonlinear.h>
 #include <mav_trajectory_generation_ros/ros_visualization.h>
@@ -55,8 +60,19 @@ class BasicPlanner {
 public:
     BasicPlanner(ros::NodeHandle& nh);
 
-    void uavOdomCallback(const nav_msgs::Odometry::ConstPtr& pose);
+    // Callback function to get the current pose
+    void localposeCallback(const geometry_msgs::PoseStamped::ConstPtr &msg);
 
+    // Callback function to get the current linear and angular velocity
+    void localvelCallback(const geometry_msgs::TwistStamped::ConstPtr &msg);
+
+    // Trigger that generates and publishes trajectory
+    void plannerTriggerCallback(const std_msgs::Bool::ConstPtr& msg);
+
+    // Get the value for activation flag
+    bool getActiveFlag();
+
+    // Set the maximum speed read from yaml file
     void setMaxSpeed(double max_v);
 
     // Plans a trajectory to take off from the current position and
@@ -78,19 +94,33 @@ public:
 
     bool publishTrajectory(const mav_trajectory_generation::Trajectory& trajectory);
 
+    // Initialize publishers, subscribers and servies
+    void initializePublishers();
+    void initializeSubscribers();
+
+    // Read the parameters from yaml file
+    void readParameters(); 
+    
 private:
+    
     ros::Publisher pub_markers_;
     ros::Publisher pub_trajectory_;
-    ros::Subscriber sub_odom_;
+    
+    ros::Subscriber state_machine_sub_;         // Subscriber for state machine trigger
+    ros::Subscriber local_pos_pose_sub_;        // Position & Orientation
+    ros::Subscriber local_pos_vel_sub_;         // Linear & Angular velocity 
 
     ros::NodeHandle& nh_;
     Eigen::Affine3d current_pose_;
     Eigen::Vector3d current_velocity_;
     Eigen::Vector3d current_angular_velocity_;
-    double max_v_; // m/s
-    double max_a_; // m/s^2
+    double max_v_;                              // Maximum velocity constraint [m/s]
+    double max_a_;                              // Maximum acceleration constraint [m/s^2]
     double max_ang_v_;
     double max_ang_a_;
+
+    bool planner_active_;
+    bool planner_done_;
 
 };
 

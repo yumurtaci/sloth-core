@@ -2,18 +2,18 @@
 <package format="2">
   <name>planner</name>
   <version>0.0.0</version>
-  <description>Trajectory planning using mav_trajectory_generation</description>
-
+  <description>
+  Trajectory planning using mav_trajectory_generation for mavros UAVs
+  </description>
   <maintainer email="batuhan.yumurtaci@tum.de">Batuhan Yumurtaci</maintainer>
 
   <license>BSD</license>
 
   <url type="website">https://github.com/yumurtaci</url>
-
+  <author email="batuhan.yumurtaci@tum.de">Batuhan Yumurtaci</author>
 
   <buildtool_depend>catkin</buildtool_depend>
   
-
   <build_depend>roscpp</build_depend>
   <build_depend>rospy</build_depend>
   <build_depend>std_msgs</build_depend>

@@ -62,22 +62,11 @@
 
 int main(int argc, char** argv) {
     ros::init(argc, argv, "simple_planner");
-    ros::NodeHandle n;
+    ros::NodeHandle nh;
 	
-    BasicPlanner planner(n);  // instantiate basic planner
-    ros::Duration(1.0).sleep();
-
-    // THIS SHOULD NORMALLY RUN INSIDE ROS::SPIN!!! JUST FOR DEMO PURPOSES LIKE THIS.
-    ROS_WARN_STREAM("PRESS ENTER TO UPDATE CURRENT POSITION AND SEND TRAJECTORY");
-    std::cin.get();
-    for (int i = 0; i < 10; i++) {
-        ros::spinOnce();  // process a few messages in the background - causes the uavPoseCallback to happen
-    }
-
-    mav_trajectory_generation::Trajectory trajectory;
-	planner.planTrajectory(&trajectory);
-    planner.publishTrajectory(trajectory);
-    ROS_WARN_STREAM("DONE. GOODBYE.");
-
+    BasicPlanner planner(nh);  // instantiate basic planner
+    
+    ros::spin();
+    
     return 0;
 }
