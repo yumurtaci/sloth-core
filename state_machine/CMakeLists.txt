@@ -10,7 +10,6 @@ find_package(catkin REQUIRED COMPONENTS
   mavros_extras
   mavros_msgs
   mavlink
-  
 )
 
 find_package(Eigen3 REQUIRED)
@@ -30,12 +29,12 @@ include_directories(
 )
 
 add_executable(state_machine 
-	src/state_machine.cpp
-	src/state_machine_node.cpp
-	include/state_machine/state_machine.h
-	)
-add_dependencies(state_machine ${catkin_EXPORTED_TARGETS})
-target_link_libraries(state_machine ${catkin_LIBRARIES})
+  src/state_machine.cpp 
+  src/state_machine_node.cpp
+)
+
+add_dependencies(${PROJECT_NAME} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
 
 cs_install()
 cs_export()

@@ -1,3 +1,35 @@
+/****************************************************************************
+ *
+ *   Copyright (c) 2022-2025 Batuhan Yumurtaci. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the
+ *    distribution.
+ * 3. Neither the name PX4 nor the names of its contributors may be
+ *    used to endorse or promote products derived from this software
+ *    without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+ * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
+ * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ ****************************************************************************/
 /**
  * @file state_machine.cpp
  *
@@ -12,7 +44,7 @@
 
 #define FCU_TIME_BUFFER 3.0f
 
-// TODO : Refactorize WPConvergence value with orientation and velocity
+// TODO : Refactorize wpConvergence value with orientation and velocity
 // TODO : Add heading for waypoints and convergence checks
 // TODO : Geometric controller activation
 // TODO : Trajectory state
@@ -23,9 +55,9 @@ namespace statemachine
   {
     ROS_INFO("[INIT]: Started State Machine");
 
-    InitializePublishers();
-    InitializeSubscribers();
-    InitializeServices();
+    initializePublishers();
+    initializeSubscribers();
+    initializeServices();
 
     // Commands for ros services
     offb_mode_cmd_.request.custom_mode = "OFFBOARD";
@@ -42,6 +74,9 @@ namespace statemachine
     current_wp_ = 0;
     wp_completed_ = false;
 
+    // Initialize messages
+    planner_trigger_msg_.data = false;
+
     // ENU frame is used -> PX4 transforms to NED
     des_pose_.pose.position.x = 0;
     des_pose_.pose.position.y = 0;
@@ -52,8 +87,8 @@ namespace statemachine
     nh_.getParam(ros::this_node::getName() + "/takeoff/y", takeoff_pose_.pose.position.y);
     nh_.getParam(ros::this_node::getName() + "/takeoff/z", takeoff_pose_.pose.position.z);
     
-    ReadWaypoints();
-    InitializeFCU();                   
+    readWaypoints();
+    initializeFCU();                   
     
     // Start state machine
     if (current_state_.armed){
@@ -67,8 +102,8 @@ namespace statemachine
     while (ros::ok())
     {
       ros::spinOnce();
-      UpdateState();
-      PublishCommand();
+      updateState();
+      publishCommand();
       rate_.sleep();
     }
 
@@ -77,15 +112,20 @@ namespace statemachine
   // Define Callback functions
   void StateMachine::stateCallback(const mavros_msgs::State::ConstPtr &msg)
   {
-    this->current_state_ = *msg;
+    current_state_ = *msg;
     }
   
   void StateMachine::localposeCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
   {
-    this->current_pose_ = *msg;
+    current_pose_ = *msg;
     }
 
-  void StateMachine::UpdateState()
+  void StateMachine::localvelCallback(const geometry_msgs::TwistStamped::ConstPtr &msg)
+  {
+    current_vel_ = *msg;
+    }
+
+  void StateMachine::updateState()
   {
     switch (state_)
     {
@@ -111,12 +151,12 @@ namespace statemachine
       // Once the altitude is reached go to the take off location
 
       bool arrivedWP = false;
-      arrivedWP = WPConvergence( current_pose_, takeoff_pose_);
+      arrivedWP = wpConvergence( current_pose_, takeoff_pose_);
       
       if (arrivedWP){
         ROS_INFO("[TAKEOFF] : Take-off completed!");
         if(getInput() == 0)
-            state_ = WAYPOINT;
+            state_ = TRAJECTORY;
         requestKeyboardInput(); 
       } else {
         ROS_INFO("[TAKEOFF] : Fasten your seatbelts ...");
@@ -131,7 +171,7 @@ namespace statemachine
       // If the mission is completed ask the user to switch to next state
       
       bool arrivedWP = false;
-      arrivedWP = WPConvergence( current_pose_, des_pose_);
+      arrivedWP = wpConvergence( current_pose_, des_pose_);
       
       if(arrivedWP && current_wp_ < n_wp_){
         ROS_INFO("[WAYPOINT] Arrived at WP %d!", current_wp_);
@@ -141,7 +181,7 @@ namespace statemachine
       } else if (arrivedWP && (current_wp_ == n_wp_)){ //n_wp_-1
         ROS_INFO("[WAYPOINT] Mission completed!");
         if(getInput() == 0)
-          state_ = LANDING;
+          state_ = TRAJECTORY;
         requestKeyboardInput();
       } else {
         ROS_INFO("[WAYPOINT] Flying to WP %d ...", current_wp_);
@@ -154,17 +194,18 @@ namespace statemachine
     case StateMachine::TRAJECTORY:
     {
       bool arrivedWP = false;
-      arrivedWP = WPConvergence( current_pose_, des_pose_);
+      arrivedWP = wpConvergence( current_pose_, des_pose_);
 
       if (arrivedWP){
-        ROS_INFO("[TRAJECTORY] : Waypoint reached!");
+        ROS_INFO("[TRAJECTORY] : Trajectory state!");
         if(getInput() == 0)
-          state_ = LANDING;
-          requestKeyboardInput(); 
+            state_ = WAYPOINT;
+        requestKeyboardInput(); 
       } else {
-        ROS_INFO("[TRAJECTORY] : Following trajectory ...");
+        ROS_INFO("[TRAJECTORY] : Following trajectory!");
         setInput(100);
         }
+
       }
     break;
     
@@ -185,7 +226,7 @@ namespace statemachine
     }
   }
   
-  void StateMachine::PublishCommand()
+  void StateMachine::publishCommand()
   {
     switch (state_)
     {
@@ -226,6 +267,8 @@ namespace statemachine
         des_pose_.pose.position.z = wp_matrix_(2, current_wp_);
       }
       
+      planner_trigger_msg_.data = false;
+      planner_trigger_pub_.publish(planner_trigger_msg_);
       local_pos_pub_.publish(des_pose_);
       
       }
@@ -233,14 +276,14 @@ namespace statemachine
 
     case StateMachine::TRAJECTORY:
     {
-      // TODO Add basic trajectory generation; minimmum snap
+      // TODO Add basic trajectory generation; minimum snap
+
+      des_pose_.pose.position.x = 0.0;
+      des_pose_.pose.position.y = 0.0;
+      des_pose_.pose.position.z = 2.0;
       
-      /*
-      this -> des_pose_.pose.position.x = 1;
-      this -> des_pose_.pose.position.y = 1;
-      this -> des_pose_.pose.position.z = 2.5;
-      */
-      
+      planner_trigger_msg_.data = true;
+      planner_trigger_pub_.publish(planner_trigger_msg_);
       local_pos_pub_.publish(des_pose_);
       
       }
@@ -259,7 +302,7 @@ namespace statemachine
     }
   }
 
-  void StateMachine::ReadWaypoints()
+  void StateMachine::readWaypoints()
   {
     // Read the waypoints from YAML file
     double pos_x_wp;
@@ -286,7 +329,7 @@ namespace statemachine
       }
     }
 
-    // Init Eige::Matrix4Xd
+    // Init Eigen::Matrix4Xd
     wp_matrix_.resize(4, n_wp_);
     
     for (int i = 0; i < n_wp_; i++){
@@ -306,17 +349,12 @@ namespace statemachine
           
       }
     }
-    
-    // // To visualize the WP Matrix
-    // std::stringstream ss;
-    // ss << wp_matrix_;
-    // std::cout << ss.str() << "\n" << std::endl;
 
     ROS_INFO("[INIT]: Waypoints ready");
 
   }
 
-  void StateMachine::InitializeFCU()
+  void StateMachine::initializeFCU()
   {
     // FCU Initialisation Sequence 
     ros::Time last_request = ros::Time::now();
@@ -367,22 +405,27 @@ namespace statemachine
     }   
   }
 
-  void StateMachine::InitializePublishers()
+  void StateMachine::initializePublishers()
   {
     local_pos_pub_ = nh_.advertise<geometry_msgs::PoseStamped>
             ("mavros/setpoint_position/local", 1);
+    planner_trigger_pub_ = nh_.advertise<std_msgs::Bool>
+            ("planner_activation", 1);
   }
 
-  void StateMachine::InitializeSubscribers()
+  void StateMachine::initializeSubscribers()
   {
     state_sub_ = nh_.subscribe<mavros_msgs::State>
             ("mavros/state", 10, &StateMachine::stateCallback, this);
 
     local_pos_pose_sub_ = nh_.subscribe<geometry_msgs::PoseStamped>
             ("mavros/local_position/pose", 10, &StateMachine::localposeCallback, this);
+    
+    local_pos_vel_sub_ = nh_.subscribe<geometry_msgs::TwistStamped>
+            ("mavros/local_position/velocity", 10, &StateMachine::localvelCallback, this);
   }
 
-  void StateMachine::InitializeServices()
+  void StateMachine::initializeServices()
   {
     arming_client_ = nh_.serviceClient<mavros_msgs::CommandBool>
             ("mavros/cmd/arming");
@@ -394,7 +437,7 @@ namespace statemachine
             ("mavros/cmd/land");
   }
 
-  bool StateMachine::WPConvergence(geometry_msgs::PoseStamped pose1, geometry_msgs::PoseStamped pose2)
+  bool StateMachine::wpConvergence(geometry_msgs::PoseStamped pose1, geometry_msgs::PoseStamped pose2)
   {
     // TODO : Add velocity and orientation checks
     
@@ -447,4 +490,4 @@ namespace statemachine
     setInput(0);
     request_input_ = false;
   }
-}
+} // namespace statemachine
