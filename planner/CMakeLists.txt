@@ -33,10 +33,6 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-# add_library(planner 
-#   src/planner.cpp 
-#   src/planner_node.cpp
-# )
 
 add_executable(planner 
   src/planner.cpp 
@@ -45,24 +41,3 @@ add_executable(planner
 
 add_dependencies(${PROJECT_NAME} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
-
-# install(
-#   TARGETS ${PROJECT_NAME}
-#   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-#   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-#   RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
-# )
-
-# install(
-#   DIRECTORY include/${PROJECT_NAME}/
-#   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
-#   FILES_MATCHING PATTERN "*.h"
-#   PATTERN ".svn" EXCLUDE
-# )
-
-
-
-
-
-
-

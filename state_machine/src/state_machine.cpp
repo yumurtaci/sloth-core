@@ -69,18 +69,28 @@ namespace statemachine
 
     // Initialize the variables
     state_ = ARMED;
+    pubreference_type_ = 2; // IGNORE_SNAP_JERK Position Velocity Acceleration Reference
+    p_targ_ << 0.0, 0.0, 0.0;
+    v_targ_ << 0.0, 0.0, 0.0;
+    a_targ_ << 0.0, 0.0, 0.0;
+    cmd_body_rate_ << 0.0, 0.0, 0.0, 0.0;
 
     n_wp_ = 0;
     current_wp_ = 0;
     wp_completed_ = false;
-
+    
     // Initialize messages
     planner_trigger_msg_.data = false;
-
+    desired_yaw_.data = 0.1;
+    
     // ENU frame is used -> PX4 transforms to NED
     des_pose_.pose.position.x = 0;
     des_pose_.pose.position.y = 0;
     des_pose_.pose.position.z = 0;
+
+    zero_pose_.pose.position.x = 0;
+    zero_pose_.pose.position.y = 0;
+    zero_pose_.pose.position.z = 0;
 
     // Read the take-off pose
     nh_.getParam(ros::this_node::getName() + "/takeoff/x", takeoff_pose_.pose.position.x);
@@ -151,12 +161,14 @@ namespace statemachine
       // Once the altitude is reached go to the take off location
 
       bool arrivedWP = false;
+      bool stoppedWP = false;
       arrivedWP = wpConvergence( current_pose_, takeoff_pose_);
-      
-      if (arrivedWP){
+      stoppedWP = wpStopped();
+
+      if (arrivedWP && stoppedWP){
         ROS_INFO("[TAKEOFF] : Take-off completed!");
         if(getInput() == 0)
-            state_ = TRAJECTORY;
+          state_ = WAYPOINT;
         requestKeyboardInput(); 
       } else {
         ROS_INFO("[TAKEOFF] : Fasten your seatbelts ...");
@@ -171,14 +183,16 @@ namespace statemachine
       // If the mission is completed ask the user to switch to next state
       
       bool arrivedWP = false;
+      bool stoppedWP = false;
       arrivedWP = wpConvergence( current_pose_, des_pose_);
-      
-      if(arrivedWP && current_wp_ < n_wp_){
+      stoppedWP = wpStopped();
+
+      if(arrivedWP && stoppedWP && current_wp_ < n_wp_){
         ROS_INFO("[WAYPOINT] Arrived at WP %d!", current_wp_);
         if(getInput() == 0)
             current_wp_++;
         requestKeyboardInput();
-      } else if (arrivedWP && (current_wp_ == n_wp_)){ //n_wp_-1
+      } else if (arrivedWP && stoppedWP && (current_wp_ == n_wp_)){ //n_wp_-1
         ROS_INFO("[WAYPOINT] Mission completed!");
         if(getInput() == 0)
           state_ = TRAJECTORY;
@@ -194,15 +208,17 @@ namespace statemachine
     case StateMachine::TRAJECTORY:
     {
       bool arrivedWP = false;
+      bool stoppedWP = false;
       arrivedWP = wpConvergence( current_pose_, des_pose_);
+      stoppedWP = wpStopped();
 
-      if (arrivedWP){
-        ROS_INFO("[TRAJECTORY] : Trajectory state!");
+      if (stoppedWP){
+        ROS_INFO("[TRAJECTORY] : Trajectory completed!");
         if(getInput() == 0)
-            state_ = WAYPOINT;
+            state_ = LANDING;
         requestKeyboardInput(); 
       } else {
-        ROS_INFO("[TRAJECTORY] : Following trajectory!");
+        ROS_INFO("[TRAJECTORY] : Following trajectory ...");
         setInput(100);
         }
 
@@ -218,7 +234,7 @@ namespace statemachine
         ROS_INFO("[LANDING] : Going down ...");
       } else {
         ROS_INFO("[LANDING] : Landing completed!");
-        }
+        } 
 
       }
     break;
@@ -234,12 +250,15 @@ namespace statemachine
     case StateMachine::ARMED:
     {
         
-      local_pos_pub_.publish(des_pose_);
-
+      //local_pos_pub_.publish(zero_pose_);
       // Take-off preparation by grabbing the current pose and target altitude
       localtakeoff_pose_.pose.position.x = current_pose_.pose.position.x;
       localtakeoff_pose_.pose.position.y = current_pose_.pose.position.y;
       localtakeoff_pose_.pose.position.z = takeoff_pose_.pose.position.z;
+
+      pubRateCommands();
+
+      //set_attitude_pub_.publish(current_pose_);
         
       }
     break;
@@ -249,10 +268,16 @@ namespace statemachine
     
       // Go to local origin at take-off height
       if (abs(current_pose_.pose.position.z - takeoff_pose_.pose.position.z) < 0.10 ){ 
-        local_pos_pub_.publish(takeoff_pose_);
+        //local_pos_pub_.publish(takeoff_pose_);  
+        p_targ_ << takeoff_pose_.pose.position.x, takeoff_pose_.pose.position.y, takeoff_pose_.pose.position.z;
+        pubFlatrefState();
+        yaw_reference_pub_.publish(desired_yaw_);
       } else {
         // Climb to the take-off altitude at current position
-        local_pos_pub_.publish(localtakeoff_pose_);
+        //local_pos_pub_.publish(localtakeoff_pose_);
+        p_targ_ << localtakeoff_pose_.pose.position.x, localtakeoff_pose_.pose.position.y, localtakeoff_pose_.pose.position.z;
+        pubFlatrefState();
+        yaw_reference_pub_.publish(desired_yaw_);
         }
     
       }
@@ -265,11 +290,14 @@ namespace statemachine
         des_pose_.pose.position.x = wp_matrix_(0, current_wp_);
         des_pose_.pose.position.y = wp_matrix_(1, current_wp_);
         des_pose_.pose.position.z = wp_matrix_(2, current_wp_);
+
+        p_targ_ << wp_matrix_(0, current_wp_), wp_matrix_(1, current_wp_), wp_matrix_(2, current_wp_);
+
       }
       
-      planner_trigger_msg_.data = false;
-      planner_trigger_pub_.publish(planner_trigger_msg_);
-      local_pos_pub_.publish(des_pose_);
+      pubFlatrefState();
+      yaw_reference_pub_.publish(desired_yaw_);
+      //local_pos_pub_.publish(des_pose_);
       
       }
     break;
@@ -280,11 +308,11 @@ namespace statemachine
 
       des_pose_.pose.position.x = 0.0;
       des_pose_.pose.position.y = 0.0;
-      des_pose_.pose.position.z = 2.0;
+      des_pose_.pose.position.z = 3.0; // hard coded final target point to finish the mission with wp convergence
       
       planner_trigger_msg_.data = true;
       planner_trigger_pub_.publish(planner_trigger_msg_);
-      local_pos_pub_.publish(des_pose_);
+      // local_pos_pub_.publish(des_pose_);
       
       }
     break;
@@ -295,7 +323,7 @@ namespace statemachine
       if (!land_cmd_.response.success){
         land_client_.call(land_cmd_);
         }
-     
+      
       }
     break;
     
@@ -370,7 +398,7 @@ namespace statemachine
     // Send a few setpoints before starting, 
     // Otherwise cant switch to Offboard
     for(int i = 100; ros::ok() && i > 0; --i){
-      local_pos_pub_.publish(des_pose_);
+      local_pos_pub_.publish(zero_pose_);
       ros::spinOnce();
       rate_.sleep();
     }
@@ -379,7 +407,7 @@ namespace statemachine
     //ros::Time last_request = ros::Time::now();
     last_request = ros::Time::now();
         
-    local_pos_pub_.publish(des_pose_);
+    local_pos_pub_.publish(zero_pose_);
 
     // Change to Offboard mode and arm w. time gaps
     while(ros::ok() && !current_state_.armed){
@@ -399,7 +427,7 @@ namespace statemachine
               last_request = ros::Time::now();
           }
       }
-      local_pos_pub_.publish(des_pose_);
+      local_pos_pub_.publish(zero_pose_);
       ros::spinOnce();
       rate_.sleep();
     }   
@@ -409,8 +437,54 @@ namespace statemachine
   {
     local_pos_pub_ = nh_.advertise<geometry_msgs::PoseStamped>
             ("mavros/setpoint_position/local", 1);
+    //local_pos_pub_ not used anymore
+
+    angular_vel_pub_ = nh_.advertise<mavros_msgs::AttitudeTarget>
+            ("/mavros/setpoint_raw/attitude", 1);
+    flat_reference_pub_ = nh_.advertise<controller_msgs::FlatTarget>
+            ("reference/flatsetpoint", 1);
+    yaw_reference_pub_ = nh_.advertise<std_msgs::Float32>
+            ("reference/yaw",1);
     planner_trigger_pub_ = nh_.advertise<std_msgs::Bool>
             ("planner_activation", 1);
+  }
+
+  void StateMachine::pubFlatrefState() 
+  {
+    controller_msgs::FlatTarget msg;
+
+    msg.header.stamp = ros::Time::now();
+    msg.header.frame_id = "map";
+    msg.type_mask = pubreference_type_;
+    msg.position.x = p_targ_(0);
+    msg.position.y = p_targ_(1);
+    msg.position.z = p_targ_(2);
+    msg.velocity.x = v_targ_(0);
+    msg.velocity.y = v_targ_(1);
+    msg.velocity.z = v_targ_(2);
+    msg.acceleration.x = a_targ_(0);
+    msg.acceleration.y = a_targ_(1);
+    msg.acceleration.z = a_targ_(2);
+    flat_reference_pub_.publish(msg);
+  }
+
+  void StateMachine::pubRateCommands() 
+  {
+    mavros_msgs::AttitudeTarget msg;
+
+    msg.header.stamp = ros::Time::now();
+    msg.header.frame_id = "map";
+    msg.body_rate.x = cmd_body_rate_(0);
+    msg.body_rate.y = cmd_body_rate_(1);
+    msg.body_rate.z = cmd_body_rate_(2);
+    msg.type_mask = 128;  // Ignore orientation messages
+    msg.orientation.w = current_pose_.pose.orientation.w;
+    msg.orientation.x = current_pose_.pose.orientation.x;
+    msg.orientation.y = current_pose_.pose.orientation.y;
+    msg.orientation.z = current_pose_.pose.orientation.z;
+    msg.thrust = cmd_body_rate_(3);
+
+    angular_vel_pub_.publish(msg);
   }
 
   void StateMachine::initializeSubscribers()
@@ -455,6 +529,30 @@ namespace statemachine
     bool converged = (v1 - v2).norm() < 0.10;
 
     return converged;
+  }
+
+  bool StateMachine::wpStopped()
+  {
+    Eigen::Vector3d quad_vel_body;
+    quad_vel_body(0) = current_vel_.twist.linear.x;
+    quad_vel_body(1) = current_vel_.twist.linear.y;
+    quad_vel_body(2) = current_vel_.twist.linear.z;
+    
+    Eigen::Quaterniond quad_att(
+      current_pose_.pose.orientation.w,
+      current_pose_.pose.orientation.x,
+      current_pose_.pose.orientation.y,
+      current_pose_.pose.orientation.z);
+    
+    Eigen::Matrix3d quad_rot;
+    quad_rot = quad_att.toRotationMatrix();
+    
+    Eigen::Vector3d quad_vel;
+    quad_vel = quad_rot * quad_vel_body;
+
+    bool stopped = quad_vel.norm() < 0.05;
+
+    return stopped;
   }
 
   void StateMachine::requestKeyboardInput()

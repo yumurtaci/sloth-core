@@ -10,6 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
   mavros_extras
   mavros_msgs
   mavlink
+  controller_msgs
 )
 
 find_package(Eigen3 REQUIRED)

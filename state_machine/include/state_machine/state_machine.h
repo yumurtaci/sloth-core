@@ -51,17 +51,19 @@
 #include <eigen3/Eigen/Geometry>
 
 #include <std_msgs/Bool.h>
+#include <std_msgs/Float32.h>
 #include <mavros_msgs/State.h>
 #include <mavros_msgs/SetMode.h>
 #include <mavros_msgs/CommandTOL.h>
 #include <mavros_msgs/CommandBool.h>
+#include <mavros_msgs/AttitudeTarget.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TwistStamped.h>
 
+#include "controller_msgs/FlatTarget.h"
+
 #include <thread>
 #include <mutex>
-
-//#include <planner/planner.h>
 
 namespace statemachine
 {
@@ -84,8 +86,6 @@ namespace statemachine
     // Define vectors and matrices
     typedef Eigen::Vector3d Vec3;
     typedef Eigen::Vector4d Vec4;
-    typedef Eigen::Matrix<double, 6, 1> StateVectorEuler;
-    typedef Eigen::Matrix<double, 7, 1> StateVectorQuaternion;
     typedef Eigen::Matrix<double, 4, Eigen::Dynamic> WaypointMatrix;
     
   private:
@@ -96,12 +96,18 @@ namespace statemachine
     int state_;                                 // State of the state machine
     int input_;                                 // Keyboard input
     int current_wp_;                            // Current waypoint number
+    int pubreference_type_;                     // Mask type for pubFlatrefState, see FlatTarget.msg 
+
+    //float override_thrust_;                     // Override message for thrust during arming
 
     ros::Rate rate_ = 20;                       // Loop rate
     
     ros::NodeHandle nh_;                        // Node handles
     
     ros::Publisher local_pos_pub_;              // Desired Position & Orientation publisher
+    ros::Publisher angular_vel_pub_;            // Desired angular velocity
+    ros::Publisher flat_reference_pub_;         // Desired pose publisher for geometric controller
+    ros::Publisher yaw_reference_pub_;          // Desired yaw publisher for geometric controller
     ros::Publisher planner_trigger_pub_;        // Publisher to trigger trajectory planner node
     
     ros::Subscriber state_sub_;                 // FCU state subscriber
@@ -113,6 +119,7 @@ namespace statemachine
     ros::ServiceClient land_client_;            // Landing ros service
 
     std_msgs::Bool planner_trigger_msg_;        // Flag to trigger trajectory planner node
+    std_msgs::Float32 desired_yaw_;             // rad
 
     mavros_msgs::State current_state_;          // FCU state
     mavros_msgs::SetMode offb_mode_cmd_;        // Offboard command for mode service
@@ -120,12 +127,17 @@ namespace statemachine
     mavros_msgs::CommandTOL land_cmd_;          // Land command for landing service
 
     geometry_msgs::PoseStamped des_pose_;       // Target pose
+    geometry_msgs::PoseStamped zero_pose_;      // Target pose for initial states
     geometry_msgs::PoseStamped takeoff_pose_;   // Take-off pose
-    geometry_msgs::PoseStamped localtakeoff_pose_;   // Local Take-off pose
+    geometry_msgs::PoseStamped localtakeoff_pose_;   // Local take-off pose
     geometry_msgs::PoseStamped current_pose_;   // Current pose
     geometry_msgs::TwistStamped current_vel_;   // Current velocity
 
     WaypointMatrix wp_matrix_;                  // Matrix to store Waypoints
+    Vec3 p_targ_;                               // Desired position vector
+    Vec3 v_targ_;                               // Desired velocity vector
+    Vec3 a_targ_;                               // Desired acceleration vector
+    Vec4 cmd_body_rate_;                        // Desired body rate and thrust vector
 
     std::mutex input_mutex_;                    // Non blocking state machine
 
@@ -156,8 +168,11 @@ namespace statemachine
     void initializeSubscribers();
     void initializeServices();  
     
-    // Check if arrived at target waypoint
-    bool wpConvergence(geometry_msgs::PoseStamped pose1, geometry_msgs::PoseStamped pose2); 
+    // Check if arrived at target waypoint - position
+    bool wpConvergence(geometry_msgs::PoseStamped pose1, geometry_msgs::PoseStamped pose2);
+
+    // Check if arrived at target waypoint - current velocity
+    bool wpStopped(); 
     
     // Decouple threads of UpdateState and PublishCommand as waiting for user input
     // Required for uniterrupted advertisement of the desired pose 
@@ -166,6 +181,11 @@ namespace statemachine
     void getKeyboardInput();
     void setInput(int input);
     void requestKeyboardInput();
+
+    // #### NEW ###
+    //############################ Integrate
+    void pubFlatrefState();  
+    void pubRateCommands();
 
   };
 }
