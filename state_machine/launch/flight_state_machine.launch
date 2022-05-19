@@ -34,6 +34,7 @@
 		  <param name="init_pos_z" value="-0.1" />
           <!-- Drone specific parameters, should be tuned beforehand-->
           <param name="attctrl_constant" value="0.3"/>
+		  <!-- std::max(0.0, std::min(1.0, norm_thrust_const_ * ref_acc.dot(zb) + norm_thrust_offset_)); -->
           <param name="normalizedthrust_constant" value="0.04"/>
           <param name="normalizedthrust_offset" value="0.01"/>
           <param name="max_acc" value="2.0" />
