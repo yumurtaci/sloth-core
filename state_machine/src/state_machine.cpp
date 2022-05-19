@@ -113,6 +113,7 @@ namespace statemachine
         ROS_INFO("[ARMED] : Press ENTER for Take-off: ");
         if(getInput() == 0) 
             state_ = TAKEOFF;
+            controller_activation_.data = true;
         requestKeyboardInput();
       } else {
         ROS_INFO("[ARMED] : Arming ...");
@@ -125,14 +126,14 @@ namespace statemachine
     {
       // Climb to a user defined safe altitude at the current position
       // Once the altitude is reached go to the take off location
-
       bool arrivedWP = false;
       bool stoppedWP = false;
       arrivedWP = wpConvergence( current_pose_, takeoff_pose_);
       stoppedWP = wpStopped();
-
+      
       bool altitudeReached = abs(current_pose_.pose.position.z - takeoff_pose_.pose.position.z) < 0.10;
-
+      controller_trigger_pub_.publish(controller_activation_);
+      
       if (arrivedWP && stoppedWP){
         ROS_INFO("[TAKEOFF] : Take-off completed!");
         if(getInput() == 0){
@@ -450,6 +451,8 @@ namespace statemachine
   {
     local_pos_pub_ = nh_.advertise<geometry_msgs::PoseStamped>
             ("mavros/setpoint_position/local", 1);
+    controller_trigger_pub_ = nh_.advertise<std_msgs::Bool>
+            ("geometric_controller/start_trigger", 1);
   }
 
   void StateMachine::initializeSubscribers()
@@ -516,6 +519,9 @@ namespace statemachine
     trajectory_cmd_.request.y = -1;
     trajectory_cmd_.request.z = -1;
     trajectory_cmd_.request.h = -1;
+
+    // Messages
+    controller_activation_.data = false;
   }
 
   int StateMachine::getInput()

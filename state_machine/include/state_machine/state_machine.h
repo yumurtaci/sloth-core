@@ -116,6 +116,7 @@ namespace statemachine
     ros::NodeHandle nh_;                        // Node handles
     
     ros::Publisher local_pos_pub_;              // Desired Position & Orientation
+    ros::Publisher controller_trigger_pub_;     // Trigger for geometric controller //###########
     
     ros::Subscriber state_sub_;                 // FCU state subscriber
     ros::Subscriber local_pos_pose_sub_;        // Position & Orientation
@@ -125,6 +126,8 @@ namespace statemachine
     ros::ServiceClient arming_client_;          // Arming ros service
     ros::ServiceClient planner_client_;         // Getting trajectory ros service
     ros::ServiceClient set_mode_client_;        // Setting mode ros service
+
+    std_msgs::Bool controller_activation_;       // Activation flag for controller //###########
     
     mavros_msgs::State current_state_;          // FCU state
     mavros_msgs::CommandTOL land_cmd_;          // Land command for landing service
