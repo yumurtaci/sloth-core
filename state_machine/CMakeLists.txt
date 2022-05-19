@@ -37,5 +37,5 @@ add_executable(state_machine
 add_dependencies(${PROJECT_NAME} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
 
-cs_install()
-cs_export()
+# cs_install()
+# cs_export()

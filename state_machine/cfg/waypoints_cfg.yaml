@@ -2,7 +2,8 @@
 takeoff: {
   x: 0.0,
   y: 0.0,
-  z: 1.5
+  z: 1.5,
+  h: 4.71,
 }
 
 # the location of waypoints for position control
@@ -12,7 +13,7 @@ waypoints: {
       x: 1.0,
       y: 0.0,
       z: 2.0,
-      h: 0.0
+      h: 0.1
     }
   },
 
@@ -21,7 +22,7 @@ waypoints: {
       x: 1.0,
       y: 2.0,
       z: 2.0,
-      h: 0.0
+      h: 1.57
     }
   },
 
@@ -30,7 +31,7 @@ waypoints: {
       x: 0.0,
       y: 2.0,
       z: 2.0,
-      h: 0.0
+      h: 3.14
     }
   },
   
@@ -39,7 +40,7 @@ waypoints: {
       x: 0.0,
       y: 0.0,
       z: 2.0,
-      h: 0.0
+      h: 4.71
     }
   },
   
@@ -48,7 +49,7 @@ waypoints: {
       x: 0.0,
       y: 0.0,
       z: 3.0,
-      h: 0.0
+      h: 0.1
     }
   },
 

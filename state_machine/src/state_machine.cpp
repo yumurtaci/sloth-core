@@ -44,11 +44,6 @@
 
 #define FCU_TIME_BUFFER 3.0f
 
-// TODO : Refactorize wpConvergence value with orientation and velocity
-// TODO : Add heading for waypoints and convergence checks
-// TODO : Geometric controller activation
-// TODO : Trajectory state
-
 namespace statemachine
 {
   StateMachine::StateMachine(ros::NodeHandle nh) : nh_(nh)
@@ -58,46 +53,8 @@ namespace statemachine
     initializePublishers();
     initializeSubscribers();
     initializeServices();
-
-    // Commands for ros services
-    offb_mode_cmd_.request.custom_mode = "OFFBOARD";
-    arm_cmd_.request.value = true;
-    land_cmd_.request.yaw = 0;
-    land_cmd_.request.latitude = 0;
-    land_cmd_.request.longitude = 0;
-    land_cmd_.request.altitude = 0;
-
-    // Initialize the variables
-    state_ = ARMED;
-    pubreference_type_ = 2; // IGNORE_SNAP_JERK Position Velocity Acceleration Reference
-    p_targ_ << 0.0, 0.0, 0.0;
-    v_targ_ << 0.0, 0.0, 0.0;
-    a_targ_ << 0.0, 0.0, 0.0;
-    cmd_body_rate_ << 0.0, 0.0, 0.0, 0.0;
-
-    n_wp_ = 0;
-    current_wp_ = 0;
-    wp_completed_ = false;
-    
-    // Initialize messages
-    planner_trigger_msg_.data = false;
-    desired_yaw_.data = 0.1;
-    
-    // ENU frame is used -> PX4 transforms to NED
-    des_pose_.pose.position.x = 0;
-    des_pose_.pose.position.y = 0;
-    des_pose_.pose.position.z = 0;
-
-    zero_pose_.pose.position.x = 0;
-    zero_pose_.pose.position.y = 0;
-    zero_pose_.pose.position.z = 0;
-
-    // Read the take-off pose
-    nh_.getParam(ros::this_node::getName() + "/takeoff/x", takeoff_pose_.pose.position.x);
-    nh_.getParam(ros::this_node::getName() + "/takeoff/y", takeoff_pose_.pose.position.y);
-    nh_.getParam(ros::this_node::getName() + "/takeoff/z", takeoff_pose_.pose.position.z);
-    
-    readWaypoints();
+    initializeParameters();
+    readWaypoints();    
     initializeFCU();                   
     
     // Start state machine
@@ -128,6 +85,15 @@ namespace statemachine
   void StateMachine::localposeCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
   {
     current_pose_ = *msg;
+    // Get roll pitch and yaw
+    tf::Quaternion q(current_pose_.pose.orientation.x, 
+                    current_pose_.pose.orientation.y, 
+                    current_pose_.pose.orientation.z, 
+                    current_pose_.pose.orientation.w);
+    tf::Matrix3x3 m(q);
+    double roll, pitch, yaw;
+    m.getRPY(roll, pitch, yaw);
+    current_RPY_ << roll, pitch, yaw;
     }
 
   void StateMachine::localvelCallback(const geometry_msgs::TwistStamped::ConstPtr &msg)
@@ -165,12 +131,38 @@ namespace statemachine
       arrivedWP = wpConvergence( current_pose_, takeoff_pose_);
       stoppedWP = wpStopped();
 
+      bool altitudeReached = abs(current_pose_.pose.position.z - takeoff_pose_.pose.position.z) < 0.10;
+
       if (arrivedWP && stoppedWP){
         ROS_INFO("[TAKEOFF] : Take-off completed!");
-        if(getInput() == 0)
+        if(getInput() == 0){
           state_ = WAYPOINT;
+          //state_ = TRAJECTORY;
+        }
         requestKeyboardInput(); 
-      } else {
+      } else if (!altitudeReached && !arrivedWP){ 
+        // Climb to target altitude at the current position
+        localtakeoff_cmd_.request.type = 0;
+        localtakeoff_cmd_.request.x = current_pose_.pose.position.x;
+        localtakeoff_cmd_.request.y = current_pose_.pose.position.y;
+        localtakeoff_cmd_.request.z = takeoff_pose_.pose.position.z;
+        localtakeoff_cmd_.request.h = current_RPY_(2);
+
+        if (!localtakeoff_cmd_.response.success){
+          planner_client_.call(localtakeoff_cmd_);
+        }
+
+      } else if (altitudeReached && !arrivedWP && stoppedWP){ 
+        // Altitude is reached go to the take off location
+        globaltakeoff_cmd_.request.type = 0;
+        globaltakeoff_cmd_.request.x = takeoff_pose_.pose.position.x;
+        globaltakeoff_cmd_.request.y = takeoff_pose_.pose.position.y;
+        globaltakeoff_cmd_.request.z = takeoff_pose_.pose.position.z;
+
+        if (!globaltakeoff_cmd_.response.success){
+          planner_client_.call(globaltakeoff_cmd_);
+        }
+      }else {
         ROS_INFO("[TAKEOFF] : Fasten your seatbelts ...");
         setInput(100);
         }
@@ -187,17 +179,30 @@ namespace statemachine
       arrivedWP = wpConvergence( current_pose_, des_pose_);
       stoppedWP = wpStopped();
 
-      if(arrivedWP && stoppedWP && current_wp_ < n_wp_){
+      if(arrivedWP && stoppedWP && current_wp_ < n_wp_-1){
+        // Arrived at waypoint, ready to send next waypoint
         ROS_INFO("[WAYPOINT] Arrived at WP %d!", current_wp_);
-        if(getInput() == 0)
+        if(getInput() == 0){
+            // Increment index
             current_wp_++;
+            sendNextWaypoint(current_wp_);
+          }  
         requestKeyboardInput();
-      } else if (arrivedWP && stoppedWP && (current_wp_ == n_wp_)){ //n_wp_-1
+      } else if ( stoppedWP && (current_wp_ == 0)){ 
+        // Initial waypoint, ready to start the mission
+        ROS_INFO("[WAYPOINT] Press ENTER to start waypoint mission!");
+        if(getInput() == 0){
+          sendNextWaypoint(current_wp_);          
+        }
+        requestKeyboardInput();
+      } else if (arrivedWP && stoppedWP && (current_wp_ == n_wp_-1)){
+        // Final waypoint, ready to switch state
         ROS_INFO("[WAYPOINT] Mission completed!");
         if(getInput() == 0)
           state_ = TRAJECTORY;
         requestKeyboardInput();
       } else {
+        // Flying to target waypoint
         ROS_INFO("[WAYPOINT] Flying to WP %d ...", current_wp_);
         setInput(100);
       }
@@ -207,20 +212,19 @@ namespace statemachine
 
     case StateMachine::TRAJECTORY:
     {
-      bool arrivedWP = false;
-      bool stoppedWP = false;
-      arrivedWP = wpConvergence( current_pose_, des_pose_);
-      stoppedWP = wpStopped();
-
-      if (stoppedWP){
-        ROS_INFO("[TRAJECTORY] : Trajectory completed!");
+      // Trigger the planner for the trajectory 
+      if (!trajectory_cmd_.response.success){
+        planner_client_.call(trajectory_cmd_);
+        traj_timer_.startTimer();
+      } else if (trajectory_cmd_.response.success && traj_timer_.getTime()>2) {
+        ROS_INFO("[TRAJECTORY] : Following trajectory press ENTER to abort!");
         if(getInput() == 0)
             state_ = LANDING;
         requestKeyboardInput(); 
       } else {
-        ROS_INFO("[TRAJECTORY] : Following trajectory ...");
+        ROS_INFO("[TRAJECTORY] : Waiting ...");
         setInput(100);
-        }
+      }
 
       }
     break;
@@ -228,7 +232,10 @@ namespace statemachine
     case StateMachine::LANDING:
     {
       // Lands at the current position
-
+      if (!land_cmd_.response.success){
+        land_client_.call(land_cmd_);
+        }
+      
       // If the system status is MAV_STATE_ACTIVE
       if (current_state_.system_status == 4){
         ROS_INFO("[LANDING] : Going down ...");
@@ -249,85 +256,51 @@ namespace statemachine
 
     case StateMachine::ARMED:
     {
-        
-      //local_pos_pub_.publish(zero_pose_);
-      // Take-off preparation by grabbing the current pose and target altitude
-      localtakeoff_pose_.pose.position.x = current_pose_.pose.position.x;
-      localtakeoff_pose_.pose.position.y = current_pose_.pose.position.y;
-      localtakeoff_pose_.pose.position.z = takeoff_pose_.pose.position.z;
-
-      pubRateCommands();
-
-      //set_attitude_pub_.publish(current_pose_);
-        
+      // Parallel thread for continuos tasks  
       }
     break;
 
     case StateMachine::TAKEOFF:
     {
-    
-      // Go to local origin at take-off height
-      if (abs(current_pose_.pose.position.z - takeoff_pose_.pose.position.z) < 0.10 ){ 
-        //local_pos_pub_.publish(takeoff_pose_);  
-        p_targ_ << takeoff_pose_.pose.position.x, takeoff_pose_.pose.position.y, takeoff_pose_.pose.position.z;
-        pubFlatrefState();
-        yaw_reference_pub_.publish(desired_yaw_);
-      } else {
-        // Climb to the take-off altitude at current position
-        //local_pos_pub_.publish(localtakeoff_pose_);
-        p_targ_ << localtakeoff_pose_.pose.position.x, localtakeoff_pose_.pose.position.y, localtakeoff_pose_.pose.position.z;
-        pubFlatrefState();
-        yaw_reference_pub_.publish(desired_yaw_);
-        }
-    
+      // Parallel thread for continuos tasks
       }
     break;
 
     case StateMachine::WAYPOINT:
     { 
-      // Publish from waypoint matrix till all waypoints are completed
-      if (current_wp_ < n_wp_){
-        des_pose_.pose.position.x = wp_matrix_(0, current_wp_);
-        des_pose_.pose.position.y = wp_matrix_(1, current_wp_);
-        des_pose_.pose.position.z = wp_matrix_(2, current_wp_);
-
-        p_targ_ << wp_matrix_(0, current_wp_), wp_matrix_(1, current_wp_), wp_matrix_(2, current_wp_);
-
-      }
-      
-      pubFlatrefState();
-      yaw_reference_pub_.publish(desired_yaw_);
-      //local_pos_pub_.publish(des_pose_);
-      
+      // Parallel thread for continuos tasks
       }
     break;
 
     case StateMachine::TRAJECTORY:
     {
-      // TODO Add basic trajectory generation; minimum snap
-
-      des_pose_.pose.position.x = 0.0;
-      des_pose_.pose.position.y = 0.0;
-      des_pose_.pose.position.z = 3.0; // hard coded final target point to finish the mission with wp convergence
-      
-      planner_trigger_msg_.data = true;
-      planner_trigger_pub_.publish(planner_trigger_msg_);
-      // local_pos_pub_.publish(des_pose_);
-      
+      // Parallel thread for continuos tasks
       }
     break;
 
     case StateMachine::LANDING:
     {
-      // Call the mavros landing service
-      if (!land_cmd_.response.success){
-        land_client_.call(land_cmd_);
-        }
-      
+      // Parallel thread for continuos tasks
       }
     break;
     
     }
+  }
+  
+  void StateMachine::sendNextWaypoint(int index)
+  {
+    waypoint_cmd_.request.type = 0;
+    waypoint_cmd_.request.x = wp_matrix_(0, index);
+    waypoint_cmd_.request.y = wp_matrix_(1, index);
+    waypoint_cmd_.request.z = wp_matrix_(2, index);
+    waypoint_cmd_.request.h = wp_matrix_(3, index);
+
+    // Set desired pose for waypoint convergence check
+    des_pose_.pose.position.x = waypoint_cmd_.request.x;
+    des_pose_.pose.position.y = waypoint_cmd_.request.y;
+    des_pose_.pose.position.z = waypoint_cmd_.request.z;
+
+    planner_client_.call(waypoint_cmd_);
   }
 
   void StateMachine::readWaypoints()
@@ -345,11 +318,9 @@ namespace statemachine
       std::string idx = "/"+ std::to_string(n_wp_) + "/";
       std::string wp_str = ros::this_node::getName() + "/waypoints" + idx;
 
-      //std::cout << wp_str << std::endl;
       no_fail = nh_.getParam(wp_str + "pos/x", pos_x_wp);
 
-      if (!no_fail){
-        //std::cout << "Number of waypoints: " << n_wp_ << std::endl;
+      if (!no_fail){        
         ROS_INFO("[INIT]: Number of waypoints: %d", n_wp_);  
         break;
       }else{ 
@@ -357,7 +328,6 @@ namespace statemachine
       }
     }
 
-    // Init Eigen::Matrix4Xd
     wp_matrix_.resize(4, n_wp_);
     
     for (int i = 0; i < n_wp_; i++){
@@ -380,6 +350,49 @@ namespace statemachine
 
     ROS_INFO("[INIT]: Waypoints ready");
 
+  }
+
+  bool StateMachine::wpConvergence(geometry_msgs::PoseStamped pose1, geometry_msgs::PoseStamped pose2)
+  {
+    
+    Vec3 v1;
+    Vec3 v2;
+
+    v1(0) = pose1.pose.position.x;
+    v1(1) = pose1.pose.position.y;
+    v1(2) = pose1.pose.position.z;
+
+    v2(0) = pose2.pose.position.x;
+    v2(1) = pose2.pose.position.y;
+    v2(2) = pose2.pose.position.z;
+
+    bool converged = (v1 - v2).norm() < 0.10;
+
+    return converged;
+  }
+
+  bool StateMachine::wpStopped()
+  {
+    Eigen::Vector3d quad_vel_body;
+    quad_vel_body(0) = current_vel_.twist.linear.x;
+    quad_vel_body(1) = current_vel_.twist.linear.y;
+    quad_vel_body(2) = current_vel_.twist.linear.z;
+    
+    Eigen::Quaterniond quad_att(
+      current_pose_.pose.orientation.w,
+      current_pose_.pose.orientation.x,
+      current_pose_.pose.orientation.y,
+      current_pose_.pose.orientation.z);
+    
+    Eigen::Matrix3d quad_rot;
+    quad_rot = quad_att.toRotationMatrix();
+    
+    Eigen::Vector3d quad_vel;
+    quad_vel = quad_rot * quad_vel_body;
+
+    bool stopped = quad_vel.norm() < 0.05;
+
+    return stopped;
   }
 
   void StateMachine::initializeFCU()
@@ -437,54 +450,6 @@ namespace statemachine
   {
     local_pos_pub_ = nh_.advertise<geometry_msgs::PoseStamped>
             ("mavros/setpoint_position/local", 1);
-    //local_pos_pub_ not used anymore
-
-    angular_vel_pub_ = nh_.advertise<mavros_msgs::AttitudeTarget>
-            ("/mavros/setpoint_raw/attitude", 1);
-    flat_reference_pub_ = nh_.advertise<controller_msgs::FlatTarget>
-            ("reference/flatsetpoint", 1);
-    yaw_reference_pub_ = nh_.advertise<std_msgs::Float32>
-            ("reference/yaw",1);
-    planner_trigger_pub_ = nh_.advertise<std_msgs::Bool>
-            ("planner_activation", 1);
-  }
-
-  void StateMachine::pubFlatrefState() 
-  {
-    controller_msgs::FlatTarget msg;
-
-    msg.header.stamp = ros::Time::now();
-    msg.header.frame_id = "map";
-    msg.type_mask = pubreference_type_;
-    msg.position.x = p_targ_(0);
-    msg.position.y = p_targ_(1);
-    msg.position.z = p_targ_(2);
-    msg.velocity.x = v_targ_(0);
-    msg.velocity.y = v_targ_(1);
-    msg.velocity.z = v_targ_(2);
-    msg.acceleration.x = a_targ_(0);
-    msg.acceleration.y = a_targ_(1);
-    msg.acceleration.z = a_targ_(2);
-    flat_reference_pub_.publish(msg);
-  }
-
-  void StateMachine::pubRateCommands() 
-  {
-    mavros_msgs::AttitudeTarget msg;
-
-    msg.header.stamp = ros::Time::now();
-    msg.header.frame_id = "map";
-    msg.body_rate.x = cmd_body_rate_(0);
-    msg.body_rate.y = cmd_body_rate_(1);
-    msg.body_rate.z = cmd_body_rate_(2);
-    msg.type_mask = 128;  // Ignore orientation messages
-    msg.orientation.w = current_pose_.pose.orientation.w;
-    msg.orientation.x = current_pose_.pose.orientation.x;
-    msg.orientation.y = current_pose_.pose.orientation.y;
-    msg.orientation.z = current_pose_.pose.orientation.z;
-    msg.thrust = cmd_body_rate_(3);
-
-    angular_vel_pub_.publish(msg);
   }
 
   void StateMachine::initializeSubscribers()
@@ -501,67 +466,56 @@ namespace statemachine
 
   void StateMachine::initializeServices()
   {
+    land_client_ = nh_.serviceClient<mavros_msgs::CommandTOL>
+            ("mavros/cmd/land");
+
     arming_client_ = nh_.serviceClient<mavros_msgs::CommandBool>
             ("mavros/cmd/arming");
 
     set_mode_client_ = nh_.serviceClient<mavros_msgs::SetMode>
             ("mavros/set_mode");
+    
+    planner_client_ = nh_.serviceClient<planner::GetTrajectory>
+            ("planner/trigger");
 
-    land_client_ = nh_.serviceClient<mavros_msgs::CommandTOL>
-            ("mavros/cmd/land");
   }
 
-  bool StateMachine::wpConvergence(geometry_msgs::PoseStamped pose1, geometry_msgs::PoseStamped pose2)
+  void StateMachine::initializeParameters()
   {
-    // TODO : Add velocity and orientation checks
-    
-    Vec3 v1;
-    Vec3 v2;
+    // Commands for mavros services
+    offb_mode_cmd_.request.custom_mode = "OFFBOARD";
+    arm_cmd_.request.value = true;
+    land_cmd_.request.yaw = 0;
+    land_cmd_.request.latitude = 0;
+    land_cmd_.request.longitude = 0;
+    land_cmd_.request.altitude = 0;
 
-    v1(0) = pose1.pose.position.x;
-    v1(1) = pose1.pose.position.y;
-    v1(2) = pose1.pose.position.z;
+    // Initialize the variables
+    state_ = ARMED;
+    n_wp_ = 0;
+    current_wp_ = 0;
+        
+    // ENU frame is used -> PX4 transforms to NED
+    des_pose_.pose.position.x = 0;
+    des_pose_.pose.position.y = 0;
+    des_pose_.pose.position.z = 0;
 
-    v2(0) = pose2.pose.position.x;
-    v2(1) = pose2.pose.position.y;
-    v2(2) = pose2.pose.position.z;
+    zero_pose_.pose.position.x = 0;
+    zero_pose_.pose.position.y = 0;
+    zero_pose_.pose.position.z = 0;
 
-    bool converged = (v1 - v2).norm() < 0.10;
+    // Read the take-off pose
+    nh_.getParam(ros::this_node::getName() + "/takeoff/x", takeoff_pose_.pose.position.x);
+    nh_.getParam(ros::this_node::getName() + "/takeoff/y", takeoff_pose_.pose.position.y);
+    nh_.getParam(ros::this_node::getName() + "/takeoff/z", takeoff_pose_.pose.position.z);
+    nh_.getParam(ros::this_node::getName() + "/takeoff/h", globaltakeoff_cmd_.request.h);
 
-    return converged;
-  }
-
-  bool StateMachine::wpStopped()
-  {
-    Eigen::Vector3d quad_vel_body;
-    quad_vel_body(0) = current_vel_.twist.linear.x;
-    quad_vel_body(1) = current_vel_.twist.linear.y;
-    quad_vel_body(2) = current_vel_.twist.linear.z;
-    
-    Eigen::Quaterniond quad_att(
-      current_pose_.pose.orientation.w,
-      current_pose_.pose.orientation.x,
-      current_pose_.pose.orientation.y,
-      current_pose_.pose.orientation.z);
-    
-    Eigen::Matrix3d quad_rot;
-    quad_rot = quad_att.toRotationMatrix();
-    
-    Eigen::Vector3d quad_vel;
-    quad_vel = quad_rot * quad_vel_body;
-
-    bool stopped = quad_vel.norm() < 0.05;
-
-    return stopped;
-  }
-
-  void StateMachine::requestKeyboardInput()
-  {
-    if (request_input_)
-      return;
-    setInput(100);
-    std::thread keyboard(&StateMachine::getKeyboardInput, this);
-    keyboard.detach();
+    // Pose argumentss are not used if type == 1
+    trajectory_cmd_.request.type = 1; 
+    trajectory_cmd_.request.x = -1; 
+    trajectory_cmd_.request.y = -1;
+    trajectory_cmd_.request.z = -1;
+    trajectory_cmd_.request.h = -1;
   }
 
   int StateMachine::getInput()
@@ -571,6 +525,15 @@ namespace statemachine
     input = input_;
     input_mutex_.unlock();
     return input;
+  }
+
+  void StateMachine::requestKeyboardInput()
+  {
+    if (request_input_)
+      return;
+    setInput(100);
+    std::thread keyboard(&StateMachine::getKeyboardInput, this);
+    keyboard.detach();
   }
 
   void StateMachine::setInput(int input)

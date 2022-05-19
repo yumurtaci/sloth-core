@@ -5,6 +5,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   std_msgs
+  message_generation
   tf
   mavros
   mavros_extras
@@ -20,19 +21,28 @@ find_package(catkin REQUIRED COMPONENTS
   roslib
 )
 
-catkin_simple(ALL_DEPS_REQUIRED)
+#catkin_simple(ALL_DEPS_REQUIRED)
+
+add_service_files(
+  FILES
+  GetTrajectory.srv
+)
+
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+)
 
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
-  CATKIN_DEPENDS roscpp	
+  CATKIN_DEPENDS roscpp	message_runtime
 )
 
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
 )
-
 
 add_executable(planner 
   src/planner.cpp 

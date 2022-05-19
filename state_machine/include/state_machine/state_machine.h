@@ -52,22 +52,37 @@
 
 #include <std_msgs/Bool.h>
 #include <std_msgs/Float32.h>
+#include <tf/transform_datatypes.h>
 #include <mavros_msgs/State.h>
 #include <mavros_msgs/SetMode.h>
 #include <mavros_msgs/CommandTOL.h>
 #include <mavros_msgs/CommandBool.h>
-#include <mavros_msgs/AttitudeTarget.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TwistStamped.h>
 
+#include "planner/GetTrajectory.h"
 #include "controller_msgs/FlatTarget.h"
 
 #include <thread>
 #include <mutex>
 
 namespace statemachine
-{
+{  
+  // Timer class to perform time based actions
+  class Timer
+  {
+  public:
+    Timer(){};
+    ros::Time start_time_;
+
+    void startTimer()
+    {start_time_ = ros::Time::now();}
+
+    double getTime()
+    {return ros::Duration(ros::Time::now() - start_time_).toSec();}
+  };
   
+  // State machine class to manage the mission
   class StateMachine
   {
 
@@ -85,7 +100,6 @@ namespace statemachine
     
     // Define vectors and matrices
     typedef Eigen::Vector3d Vec3;
-    typedef Eigen::Vector4d Vec4;
     typedef Eigen::Matrix<double, 4, Eigen::Dynamic> WaypointMatrix;
     
   private:
@@ -95,50 +109,46 @@ namespace statemachine
     int n_wp_;                                  // Total number of waypoints
     int state_;                                 // State of the state machine
     int input_;                                 // Keyboard input
-    int current_wp_;                            // Current waypoint number
-    int pubreference_type_;                     // Mask type for pubFlatrefState, see FlatTarget.msg 
-
-    //float override_thrust_;                     // Override message for thrust during arming
+    int current_wp_;                            // Current waypoint index
 
     ros::Rate rate_ = 20;                       // Loop rate
     
     ros::NodeHandle nh_;                        // Node handles
     
-    ros::Publisher local_pos_pub_;              // Desired Position & Orientation publisher
-    ros::Publisher angular_vel_pub_;            // Desired angular velocity
-    ros::Publisher flat_reference_pub_;         // Desired pose publisher for geometric controller
-    ros::Publisher yaw_reference_pub_;          // Desired yaw publisher for geometric controller
-    ros::Publisher planner_trigger_pub_;        // Publisher to trigger trajectory planner node
+    ros::Publisher local_pos_pub_;              // Desired Position & Orientation
     
     ros::Subscriber state_sub_;                 // FCU state subscriber
     ros::Subscriber local_pos_pose_sub_;        // Position & Orientation
     ros::Subscriber local_pos_vel_sub_;         // Linear & Angular velocity 
 
-    ros::ServiceClient arming_client_;          // Arming ros service
-    ros::ServiceClient set_mode_client_;        // Setting mode ros service
     ros::ServiceClient land_client_;            // Landing ros service
-
-    std_msgs::Bool planner_trigger_msg_;        // Flag to trigger trajectory planner node
-    std_msgs::Float32 desired_yaw_;             // rad
-
+    ros::ServiceClient arming_client_;          // Arming ros service
+    ros::ServiceClient planner_client_;         // Getting trajectory ros service
+    ros::ServiceClient set_mode_client_;        // Setting mode ros service
+    
     mavros_msgs::State current_state_;          // FCU state
-    mavros_msgs::SetMode offb_mode_cmd_;        // Offboard command for mode service
-    mavros_msgs::CommandBool arm_cmd_;          // Arm command for arming service
     mavros_msgs::CommandTOL land_cmd_;          // Land command for landing service
-
+    mavros_msgs::CommandBool arm_cmd_;          // Arm command for arming service
+    mavros_msgs::SetMode offb_mode_cmd_;        // Offboard command for mode service
+    
     geometry_msgs::PoseStamped des_pose_;       // Target pose
     geometry_msgs::PoseStamped zero_pose_;      // Target pose for initial states
     geometry_msgs::PoseStamped takeoff_pose_;   // Take-off pose
-    geometry_msgs::PoseStamped localtakeoff_pose_;   // Local take-off pose
     geometry_msgs::PoseStamped current_pose_;   // Current pose
     geometry_msgs::TwistStamped current_vel_;   // Current velocity
 
+    planner::GetTrajectory waypoint_cmd_;       // Trigger waypoint w. planner ros service
+    planner::GetTrajectory trajectory_cmd_;     // Trigger waypoint w. planner ros service
+    planner::GetTrajectory localtakeoff_cmd_;   // Trigger local takeoff w. planner ros service
+    planner::GetTrajectory globaltakeoff_cmd_;  // Trigger global takeoff w. planner ros service
+    
+    Vec3 current_RPY_;                          // Current Roll, Pitch and Yaw [rad]
+    
     WaypointMatrix wp_matrix_;                  // Matrix to store Waypoints
-    Vec3 p_targ_;                               // Desired position vector
-    Vec3 v_targ_;                               // Desired velocity vector
-    Vec3 a_targ_;                               // Desired acceleration vector
-    Vec4 cmd_body_rate_;                        // Desired body rate and thrust vector
 
+    Timer traj_timer_;                          // Timer object for trajectory
+    Timer servo_timer_;                         // Timer object for actuators 
+    
     std::mutex input_mutex_;                    // Non blocking state machine
 
     
@@ -156,9 +166,21 @@ namespace statemachine
     
     // Commands in a particular state
     void publishCommand();
+
+    // Publish target body rates and thrust for geometric controller
+    void pubRateCommands();
+
+    // Set and send the next waypoint for trajectory generation
+    void sendNextWaypoint(int index);
     
     // Read the waypoints from YAML file
     void readWaypoints();
+    
+    // Check if arrived at target waypoint - position
+    bool wpConvergence(geometry_msgs::PoseStamped pose1, geometry_msgs::PoseStamped pose2);
+    
+    // Check if arrived at target waypoint - current velocity
+    bool wpStopped(); 
     
     // Initialize the FCU connection for Mavros and PX4
     void initializeFCU();
@@ -166,13 +188,8 @@ namespace statemachine
     // Initialize publishers, subscribers and servies
     void initializePublishers();
     void initializeSubscribers();
-    void initializeServices();  
-    
-    // Check if arrived at target waypoint - position
-    bool wpConvergence(geometry_msgs::PoseStamped pose1, geometry_msgs::PoseStamped pose2);
-
-    // Check if arrived at target waypoint - current velocity
-    bool wpStopped(); 
+    void initializeServices();
+    void initializeParameters();  
     
     // Decouple threads of UpdateState and PublishCommand as waiting for user input
     // Required for uniterrupted advertisement of the desired pose 
@@ -181,11 +198,6 @@ namespace statemachine
     void getKeyboardInput();
     void setInput(int input);
     void requestKeyboardInput();
-
-    // #### NEW ###
-    //############################ Integrate
-    void pubFlatrefState();  
-    void pubRateCommands();
 
   };
 }
