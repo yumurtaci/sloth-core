@@ -1,0 +1,17 @@
+<launch>
+    <arg name="mav_name" default="firefly"/>
+
+        <!--- Trajectory planner -->
+        <node name="planner" pkg="planner" type="planner" output="screen" clear_params = "true">
+            <rosparam command="load" file="$(find planner)/cfg/trajectory_config.yaml"/>
+            <!---<remap from="uav_pose" to="odometry_sensor1/odometry"/>-->
+        </node>
+
+        <!--- Trajectory sampler -->
+        <node name="sampler" pkg="mav_trajectory_generation_ros" type="trajectory_sampler_node" output="screen">
+            <remap from="path_segments_4D" to="trajectory"/>
+        </node>
+        
+        <node type="rviz" name="rviz" pkg="rviz" respawn="false" args="-d $(find planner)/launch/trajectory_config.rviz" />
+
+</launch>

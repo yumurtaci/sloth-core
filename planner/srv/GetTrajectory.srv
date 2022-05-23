@@ -1,0 +1,16 @@
+# Triggers the trajectory generation 
+#
+# Gets the type of trajectory:
+# WAYPOINT 	    = 0    
+# TRAJECTORY 	= 1    
+# PERCHING 	    = 2   
+#
+# Gets the position and heading of the goal 
+
+int32 type
+float64  x
+float64  y
+float64  z
+float64  h
+---
+bool success

@@ -1,0 +1,84 @@
+# sets maximal velocity and acceleration values along the trajectory
+dynamic_params: {
+  max_v: 3.0,
+  max_a: 2.0
+}
+
+# provides the location of waypoints to plan trajectory through
+# (x,y)=(0,0) is center of flight arena
+# meters, radians
+
+
+waypoints: {
+  '0': {
+    pos: {
+      x: 1.0,
+      y: 0.0,
+      z: 2.0,
+      h: 0.1
+    }
+  },
+  '1': {
+    pos: {
+      x: 1.0,
+      y: 1.5,
+      z: 2.0,
+      h: 0.1
+    }
+  },
+  '2': {
+    pos: {
+      x: 0.0,
+      y: 1.5,
+      z: 2.0,
+      h: 1.6 #0.1
+    }
+  },
+  '3': {
+    pos: {
+      x: 0.0,
+      y: -1.5,
+      z: 2.0,
+      h: 3.14 #0.1
+    }
+  },
+  '4': {
+    pos: {
+      x: 1.0,
+      y: -1.5,
+      z: 2.0,
+      h: 4.71 #0.1
+    }
+  },
+  '5': {
+    pos: {
+      x: 1.0,
+      y: 0.0,
+      z: 2.0,
+      h: 0.1
+    }
+  },
+  '6': {
+    pos: {
+      x: 0.0,
+      y: 0.0,
+      z: 3.0,
+      h: 0.1
+    },
+    vel :{
+      x: 0.0,
+      y: 0.0,
+      z: 0.0,
+      h: 0.0
+    },
+    acc: {
+      x: 0.0,
+      y: 0.0,
+      z: 0.0,
+      h: 0.0
+    }
+  }
+}
+
+
+# last waypoint needs velocity and acceleration at 0!

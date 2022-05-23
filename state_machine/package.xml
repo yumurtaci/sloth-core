@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>state_machine</name>
+  <version>0.0.0</version>
+  <description> 
+  State machine package for mavros UAVs 
+  </description>
+  <maintainer email="batuhan.yumurtaci@tum.de">Batuhan Yumurtaci</maintainer>
+
+  <license>BSD</license>
+
+  <url type="website">https://github.com/yumurtaci</url>
+  <author email="batuhan.yumurtaci@tum.de">Batuhan Yumurtaci</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>roscpp</build_depend>
+  <build_depend>rospy</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>tf</build_depend>
+  <build_depend> eigen_catkin</build_depend>
+  <build_depend>mavros</build_depend>
+  <build_depend>mavros_extras</build_depend>
+  <build_depend>mavros_msgs</build_depend>
+  <build_depend>mavlink</build_depend>
+  <build_depend>planner</build_depend>
+  <build_depend>controller_msgs</build_depend>
+  <build_export_depend>roscpp</build_export_depend>
+  <build_export_depend>rospy</build_export_depend>
+  <build_export_depend>std_msgs</build_export_depend>
+  <build_export_depend>geometry_msgs</build_export_depend>
+  <build_export_depend>tf</build_export_depend>
+  <build_export_depend> eigen_catkin</build_export_depend>
+  <build_export_depend>mavros</build_export_depend>
+  <build_export_depend>mavros_extras</build_export_depend>
+  <build_export_depend>mavros_msgs</build_export_depend>
+  <build_export_depend>mavlink</build_export_depend>
+  <build_export_depend>controller_msgs</build_export_depend>
+  <exec_depend>roscpp</exec_depend>
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>tf</exec_depend>
+  <exec_depend> eigen_catkin</exec_depend>
+  <exec_depend>mavros</exec_depend>
+  <exec_depend>mavros_extras</exec_depend>
+  <exec_depend>mavros_msgs</exec_depend>
+  <exec_depend>mavlink</exec_depend>
+  <exec_depend>controller_msgs</exec_depend>
+  
+
+  <export>
+
+  </export>
+</package>
