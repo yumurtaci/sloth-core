@@ -48,7 +48,7 @@ namespace statemachine
 {
   StateMachine::StateMachine(ros::NodeHandle nh) : nh_(nh)
   {
-    ROS_INFO("[INIT]: Started State Machine");
+    ROS_WARN("[INIT]: Starting State Machine ...");
 
     initializePublishers();
     initializeSubscribers();
@@ -57,6 +57,8 @@ namespace statemachine
     readWaypoints();    
     initializeFCU();                   
     
+    ROS_WARN("[INIT]: State Machine is ready!");
+
     // Start state machine
     if (current_state_.armed){
       if(getInput() == 0) 

@@ -19,6 +19,8 @@ BasicPlanner::BasicPlanner(ros::NodeHandle& nh) :
         current_velocity_(Eigen::Vector3d::Zero()),
         current_pose_(Eigen::Affine3d::Identity()) 
 {
+    ROS_WARN("[INIT]: Starting Trajectory Planner ...");
+
     // Initialize parameters
     state_ = 0;
     dimension_ = 4;
@@ -34,6 +36,8 @@ BasicPlanner::BasicPlanner(ros::NodeHandle& nh) :
     initializePublishers();
     initializeSubscribers();
     initializeServices();
+
+    ROS_WARN("[INIT]: Trajectory Planner is ready!");
     
 }
 
