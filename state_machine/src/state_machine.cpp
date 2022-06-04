@@ -96,6 +96,14 @@ namespace statemachine
     double roll, pitch, yaw;
     m.getRPY(roll, pitch, yaw);
     current_RPY_ << roll, pitch, yaw;
+    
+    // Conversion radians to degree
+    double pi = 3.14159;
+    rpy_.x = roll * (180 / pi);
+    rpy_.y = pitch * (180 / pi);
+    rpy_.z = yaw * (180 / pi);
+    
+    rpy_pub_.publish(rpy_);
     }
 
   void StateMachine::localvelCallback(const geometry_msgs::TwistStamped::ConstPtr &msg)
@@ -455,6 +463,8 @@ namespace statemachine
             ("mavros/setpoint_position/local", 1);
     controller_trigger_pub_ = nh_.advertise<std_msgs::Bool>
             ("geometric_controller/start_trigger", 1);
+    rpy_pub_ = nh_.advertise<geometry_msgs::Vector3>
+            ("quadrotor/RPY", 1);
   }
 
   void StateMachine::initializeSubscribers()

@@ -59,6 +59,7 @@
 #include <mavros_msgs/CommandBool.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TwistStamped.h>
+#include <geometry_msgs/Vector3.h>
 
 #include "planner/GetTrajectory.h"
 #include "controller_msgs/FlatTarget.h"
@@ -116,7 +117,8 @@ namespace statemachine
     ros::NodeHandle nh_;                        // Node handles
     
     ros::Publisher local_pos_pub_;              // Desired Position & Orientation
-    ros::Publisher controller_trigger_pub_;     // Trigger for geometric controller //###########
+    ros::Publisher controller_trigger_pub_;     // Trigger for geometric controller
+    ros::Publisher rpy_pub_;                    // Roll, pitch and yaw publisher
     
     ros::Subscriber state_sub_;                 // FCU state subscriber
     ros::Subscriber local_pos_pose_sub_;        // Position & Orientation
@@ -127,7 +129,7 @@ namespace statemachine
     ros::ServiceClient planner_client_;         // Getting trajectory ros service
     ros::ServiceClient set_mode_client_;        // Setting mode ros service
 
-    std_msgs::Bool controller_activation_;       // Activation flag for controller //###########
+    std_msgs::Bool controller_activation_;       // Activation flag for controller
     
     mavros_msgs::State current_state_;          // FCU state
     mavros_msgs::CommandTOL land_cmd_;          // Land command for landing service
@@ -139,6 +141,7 @@ namespace statemachine
     geometry_msgs::PoseStamped takeoff_pose_;   // Take-off pose
     geometry_msgs::PoseStamped current_pose_;   // Current pose
     geometry_msgs::TwistStamped current_vel_;   // Current velocity
+    geometry_msgs::Vector3 rpy_;                // Current roll, pitch and yaw
 
     planner::GetTrajectory waypoint_cmd_;       // Trigger waypoint w. planner ros service
     planner::GetTrajectory trajectory_cmd_;     // Trigger waypoint w. planner ros service
