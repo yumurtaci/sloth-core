@@ -7,7 +7,7 @@
 
 	<!--- Trajectory Planner -->
 	<node name="planner" pkg="planner" type="planner" output="screen" clear_params = "true">
-		<rosparam command="load" file="$(find planner)/cfg/trajectory_config.yaml"/>
+		<rosparam command="load" file="$(find planner)/cfg/timeofcontact_config.yaml"/>
 	</node>
 
 	<!-- Trajectory Sampler -->

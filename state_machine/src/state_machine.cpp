@@ -133,7 +133,7 @@ namespace statemachine
       arrivedWP = wpConvergence( current_pose_, takeoff_pose_);
       stoppedWP = wpStopped();
       
-      bool altitudeReached = abs(current_pose_.pose.position.z - takeoff_pose_.pose.position.z) < 0.10;
+      bool altitudeReached = abs(current_pose_.pose.position.z - takeoff_pose_.pose.position.z) < 0.20;
       controller_trigger_pub_.publish(controller_activation_);
       
       if (arrivedWP && stoppedWP){
@@ -369,7 +369,7 @@ namespace statemachine
     v2(1) = pose2.pose.position.y;
     v2(2) = pose2.pose.position.z;
 
-    bool converged = (v1 - v2).norm() < 0.10;
+    bool converged = (v1 - v2).norm() < 0.20;
 
     return converged;
   }

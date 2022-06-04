@@ -1,7 +1,8 @@
 # sets maximal velocity and acceleration values along the trajectory
 dynamic_params: {
-  max_v: 4.0,
-  max_a: 4.0
+# v:4, a:4
+  max_v: 3.0,
+  max_a: 2.0
 }
 
 # provides the location of waypoints to plan trajectory through
@@ -12,45 +13,45 @@ dynamic_params: {
 waypoints: {
   '0': {
     pos: {
-      x: 1.0,
-      y: -1.01,
-      z: 2.2,
+      x: 0.15,
+      y: 1.01,
+      z: 1.5,
       h: 1.57
     }
   },
 
   '1': {
     pos: {
-      x: 1.0,
-      y: 1.0,
-      z: 2.0,
+      x: 0.15,
+      y: -1.01,
+      z: 1.5,
       h: 1.57
     },
   },
 
   '2': {
     pos: {
-      x: -1.01,
-      y: 1.0,
-      z: 2.0,
+      x: 0.15,
+      y: -1.36,
+      z: 1.2,
       h: 1.57
     },
   },
   
   '3': {
     pos: {
-      x: -1.01,
-      y: -1.01,
-      z: 2.0,
+      x: 0.15,
+      y: -1.36,
+      z: 1.0,
       h: 1.57
     },
   },
   
   '4': {
     pos: {
-      x: 0.0,
-      y: 0.0,
-      z: 2.0,
+      x: 0.15,
+      y: -1.36,
+      z: 0.85,
       h: 1.57
     },
     vel :{
