@@ -147,8 +147,25 @@ namespace statemachine
       if (arrivedWP && stoppedWP){
         ROS_INFO("[TAKEOFF] : Take-off completed!");
         if(getInput() == 0){
-          state_ = WAYPOINT;
+          //state_ = WAYPOINT;
           //state_ = TRAJECTORY;
+          switch (perching_type_)
+          {
+          case 1:
+            state_ = TRAJECTORY;
+            break;
+          case 2:
+            state_ = PERCHING;
+            actuator_control_msg_.data = 2; // PREPARE
+            break;
+          case 3:
+            state_ = PERCHING;
+            actuator_control_msg_.data = 2; // PREPARE
+            break;
+          default:
+            state_ = TRAJECTORY;
+            break;
+          }
         }
         requestKeyboardInput(); 
       } else if (!altitudeReached && !arrivedWP){ 
@@ -210,7 +227,23 @@ namespace statemachine
         // Final waypoint, ready to switch state
         ROS_INFO("[WAYPOINT] Mission completed!");
         if(getInput() == 0)
-          state_ = TRAJECTORY;
+          switch (perching_type_)
+          {
+          case 1:
+            state_ = TRAJECTORY;
+            break;
+          case 2:
+            state_ = PERCHING;
+            actuator_control_msg_.data = 2; // PREPARE
+            break;
+          case 3:
+            state_ = PERCHING;
+            actuator_control_msg_.data = 2; // PREPARE
+            break;
+          default:
+            state_ = TRAJECTORY;
+            break;
+          }
         requestKeyboardInput();
       } else {
         // Flying to target waypoint
@@ -252,7 +285,27 @@ namespace statemachine
         ROS_INFO("[LANDING] : Going down ...");
       } else {
         ROS_INFO("[LANDING] : Landing completed!");
+        actuator_control_msg_.data = 0; // IDLE
         } 
+
+      }
+    break;
+
+    case StateMachine::PERCHING:
+    {
+      // Trigger the planner for the perching trajectory 
+      if (!perching_trj_cmd_.response.success){
+        planner_client_.call(perching_trj_cmd_);
+        traj_timer_.startTimer();
+      } else if (perching_trj_cmd_.response.success && traj_timer_.getTime()>1) {
+        ROS_INFO("[PERCHING] : Following trajectory press ENTER to abort!");
+        if(getInput() == 0)
+            state_ = LANDING;
+        requestKeyboardInput();
+      } else {
+        ROS_INFO("[PERCHING] : Waiting ...");
+        setInput(100);
+      }
 
       }
     break;
@@ -274,6 +327,8 @@ namespace statemachine
     case StateMachine::TAKEOFF:
     {
       // Parallel thread for continuos tasks
+      actuator_control_msg_.data = 1; // FLIGHT
+      actuator_control_pub_.publish(actuator_control_msg_);
       }
     break;
 
@@ -292,7 +347,42 @@ namespace statemachine
     case StateMachine::LANDING:
     {
       // Parallel thread for continuos tasks
+      actuator_control_pub_.publish(actuator_control_msg_);
       }
+    break;
+
+    case StateMachine::PERCHING:
+    {
+      // 2: vertical perching, 3: inclined perching
+      if (perching_type_ == 2){
+        timeToContact_msg_.data = timeToContact(current_pose_, ver_perch_pose_);
+      } else if (perching_type_ == 3){
+        timeToContact_msg_.data = timeToContact(current_pose_, inc_perch_pose_);
+      }
+      
+      // For visualization
+      if (timeToContact_msg_.data >= ttc_threshold_ && !force_disarm_cmd_.response.success){
+        timeToContact_pub_.publish(timeToContact_msg_);
+      }
+
+      // && !force_disarm_cmd_.response.success
+      if (timeToContact_msg_.data < ttc_threshold_ && !force_disarm_cmd_.response.success){
+        force_disarm_client_.call(force_disarm_cmd_);
+        actuator_control_msg_.data = 3; // CLOSE
+        perching_timer_.startTimer();
+        ROS_ERROR("[PERCHING]: Motors disarmed!");
+      }
+
+      if(perching_timer_.getTime() > 2 && force_disarm_cmd_.response.success){
+        // Send release command to dynamixel
+        ROS_WARN("[PERCHING]: Releasing actuators ...");
+        actuator_control_msg_.data = 4; // RELEASE
+      }
+      
+      actuator_control_pub_.publish(actuator_control_msg_);
+
+      }
+
     break;
     
     }
@@ -327,12 +417,12 @@ namespace statemachine
     while(ros::ok() && no_fail){
       
       std::string idx = "/"+ std::to_string(n_wp_) + "/";
-      std::string wp_str = ros::this_node::getName() + "/waypoints" + idx;
+      std::string wp_str = "planner/waypoints" + idx;
 
       no_fail = nh_.getParam(wp_str + "pos/x", pos_x_wp);
 
       if (!no_fail){        
-        ROS_INFO("[INIT]: Number of waypoints: %d", n_wp_);  
+        //ROS_INFO("[INIT]: Number of waypoints: %d", n_wp_);  
         break;
       }else{ 
         n_wp_++;
@@ -344,7 +434,8 @@ namespace statemachine
     for (int i = 0; i < n_wp_; i++){
       
       std::string idx = "/"+ std::to_string(i) + "/";
-      std::string wp_str = ros::this_node::getName() + "/waypoints" + idx;
+      //std::string wp_str = ros::this_node::getName() + "/waypoints" + idx;
+      std::string wp_str = "planner/waypoints" + idx;
 
       no_fail = nh_.getParam(wp_str + "pos/x", pos_x_wp);
       no_fail = nh_.getParam(wp_str + "pos/y", pos_y_wp);
@@ -377,7 +468,8 @@ namespace statemachine
     v2(1) = pose2.pose.position.y;
     v2(2) = pose2.pose.position.z;
 
-    bool converged = (v1 - v2).norm() < 0.20;
+    //wp_convergence_threshold
+    bool converged = (v1 - v2).norm() < wp_converged_threshold_;
 
     return converged;
   }
@@ -400,10 +492,48 @@ namespace statemachine
     
     Eigen::Vector3d quad_vel;
     quad_vel = quad_rot * quad_vel_body;
-
-    bool stopped = quad_vel.norm() < 0.05;
+    
+    bool stopped = quad_vel.norm() < wp_converged_threshold_;
 
     return stopped;
+  }
+  
+  double StateMachine::timeToContact(geometry_msgs::PoseStamped pose1, geometry_msgs::PoseStamped pose2)
+  { 
+    Vec3 v1;
+    v1(0) = pose1.pose.position.x;
+    v1(1) = pose1.pose.position.y;
+    v1(2) = pose1.pose.position.z;
+
+    Vec3 target;
+    target(0) = pose2.pose.position.x;
+    target(1) = pose2.pose.position.y;
+    target(2) = pose2.pose.position.z;
+
+    Vec3 quad_vel_body;
+    quad_vel_body(0) = current_vel_.twist.linear.x;
+    quad_vel_body(1) = current_vel_.twist.linear.y;
+    quad_vel_body(2) = current_vel_.twist.linear.z;
+    
+    Eigen::Quaterniond quad_att(
+    current_pose_.pose.orientation.w,
+    current_pose_.pose.orientation.x,
+    current_pose_.pose.orientation.y,
+    current_pose_.pose.orientation.z);
+    
+    Eigen::Matrix3d quad_rot;
+    quad_rot = quad_att.toRotationMatrix();
+    
+    Vec3 quad_vel;
+    quad_vel = quad_rot * quad_vel_body;
+
+    double absVelocity = quad_vel.norm();
+    double absDistance = (v1 - target).norm();
+    double altitudeDifference = v1(2) - target(2);  
+
+    // relevant only if the quadrotor is above the target point
+    // and the altitude difference is less than 1 m
+    return (altitudeDifference < 0 && altitudeDifference > 1) ? 1 : (absDistance / absVelocity);
   }
 
   void StateMachine::initializeFCU()
@@ -428,7 +558,6 @@ namespace statemachine
     }
 
     // Timer used to prevent FCU overflowing
-    //ros::Time last_request = ros::Time::now();
     last_request = ros::Time::now();
         
     local_pos_pub_.publish(zero_pose_);
@@ -465,6 +594,10 @@ namespace statemachine
             ("geometric_controller/start_trigger", 1);
     rpy_pub_ = nh_.advertise<geometry_msgs::Vector3>
             ("quadrotor/RPY", 1);
+    timeToContact_pub_ = nh_.advertise<std_msgs::Float64>
+            ("quadrotor/TTC", 1);
+    actuator_control_pub_ = nh_.advertise<std_msgs::Int32>
+            ("actuator_control/state", 1);
   }
 
   void StateMachine::initializeSubscribers()
@@ -476,7 +609,7 @@ namespace statemachine
             ("mavros/local_position/pose", 10, &StateMachine::localposeCallback, this);
     
     local_pos_vel_sub_ = nh_.subscribe<geometry_msgs::TwistStamped>
-            ("mavros/local_position/velocity", 10, &StateMachine::localvelCallback, this);
+            ("mavros/local_position/velocity_body", 10, &StateMachine::localvelCallback, this);
   }
 
   void StateMachine::initializeServices()
@@ -492,6 +625,9 @@ namespace statemachine
     
     planner_client_ = nh_.serviceClient<planner::GetTrajectory>
             ("planner/trigger");
+    
+    force_disarm_client_ = nh_.serviceClient<mavros_msgs::CommandLong>
+            ("mavros/cmd/command");
 
   }
 
@@ -499,11 +635,24 @@ namespace statemachine
   {
     // Commands for mavros services
     offb_mode_cmd_.request.custom_mode = "OFFBOARD";
+
     arm_cmd_.request.value = true;
+
     land_cmd_.request.yaw = 0;
     land_cmd_.request.latitude = 0;
     land_cmd_.request.longitude = 0;
     land_cmd_.request.altitude = 0;
+
+    force_disarm_cmd_.request.broadcast = false;
+    force_disarm_cmd_.request.command = 400;
+    force_disarm_cmd_.request.confirmation = 0;
+    force_disarm_cmd_.request.param1 = 0.0;
+    force_disarm_cmd_.request.param2 = 21196.0;
+    force_disarm_cmd_.request.param3 = 0.0;
+    force_disarm_cmd_.request.param4 = 0.0;
+    force_disarm_cmd_.request.param5 = 0.0;
+    force_disarm_cmd_.request.param6 = 0.0;
+    force_disarm_cmd_.request.param7 = 0.0;
 
     // Initialize the variables
     state_ = ARMED;
@@ -525,12 +674,40 @@ namespace statemachine
     nh_.getParam(ros::this_node::getName() + "/takeoff/z", takeoff_pose_.pose.position.z);
     nh_.getParam(ros::this_node::getName() + "/takeoff/h", globaltakeoff_cmd_.request.h);
 
-    // Pose argumentss are not used if type == 1
+    // Pose arguments are not used if type == 1
     trajectory_cmd_.request.type = 1; 
     trajectory_cmd_.request.x = -1; 
     trajectory_cmd_.request.y = -1;
     trajectory_cmd_.request.z = -1;
     trajectory_cmd_.request.h = -1;
+
+    // Threshold values, user configurable
+    nh_.getParam(ros::this_node::getName() + "/wp_convergence_threshold", wp_converged_threshold_);
+    nh_.getParam(ros::this_node::getName() + "/wp_stopped_threshold", wp_stopped_threshold_);
+    
+    // Perching configuration
+
+    // Time to contact
+    nh_.getParam(ros::this_node::getName() + "/ttc_threshold", ttc_threshold_);
+
+    // Read vertical perching pose
+    nh_.getParam("/planner/waypoints_vertical_perching/3/pos/x", ver_perch_pose_.pose.position.x);
+    nh_.getParam("/planner/waypoints_vertical_perching/3/pos/y", ver_perch_pose_.pose.position.y);
+    nh_.getParam("/planner/waypoints_vertical_perching/3/pos/z", ver_perch_pose_.pose.position.z);
+
+    // Read vertical perching pose
+    nh_.getParam("/planner/waypoints_inclined_perching/1/pos/x", inc_perch_pose_.pose.position.x);
+    nh_.getParam("/planner/waypoints_inclined_perching/1/pos/y", inc_perch_pose_.pose.position.y);
+    nh_.getParam("/planner/waypoints_inclined_perching/1/pos/z", inc_perch_pose_.pose.position.z);
+
+    // Get the perching type
+    nh_.getParam(ros::this_node::getName() + "/perching_type", perching_type_);
+
+    perching_trj_cmd_.request.type = perching_type_; 
+    perching_trj_cmd_.request.x = -1; 
+    perching_trj_cmd_.request.y = -1;
+    perching_trj_cmd_.request.z = -1;
+    perching_trj_cmd_.request.h = -1;
 
     // Messages
     controller_activation_.data = false;
