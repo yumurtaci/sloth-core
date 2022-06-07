@@ -320,13 +320,13 @@ namespace statemachine
 
     case StateMachine::ARMED:
     {
-      // Parallel thread for continuos tasks  
+      // Parallel thread for continuous tasks  
       }
     break;
 
     case StateMachine::TAKEOFF:
     {
-      // Parallel thread for continuos tasks
+      // Parallel thread for continuous tasks
       actuator_control_msg_.data = 1; // FLIGHT
       actuator_control_pub_.publish(actuator_control_msg_);
       }
@@ -334,19 +334,19 @@ namespace statemachine
 
     case StateMachine::WAYPOINT:
     { 
-      // Parallel thread for continuos tasks
+      // Parallel thread for continuous tasks
       }
     break;
 
     case StateMachine::TRAJECTORY:
     {
-      // Parallel thread for continuos tasks
+      // Parallel thread for continuous tasks
       }
     break;
 
     case StateMachine::LANDING:
     {
-      // Parallel thread for continuos tasks
+      // Parallel thread for continuous tasks
       actuator_control_pub_.publish(actuator_control_msg_);
       }
     break;

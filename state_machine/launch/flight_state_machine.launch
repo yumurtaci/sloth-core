@@ -1,13 +1,32 @@
 <launch>
 
+	<!-- Parameters -->
+	<!-- Waypoint convergence threshold, absolute distance in 3D space -->
+	<arg name="wp_convergence_threshold" default="0.2"/>
+	<!-- Waypoint stop threshold, absolute velocity in 3D space -->
+	<arg name="wp_stopped_threshold" default="0.2"/>
+	<!-- Type of perching maneuver, 1-no perch 2-vertical 3-inclined -->
+  	<arg name="perching_type" default="2"/>
+	<!-- Threshold value for time to contact, disarms and closes the arms -->
+	<arg name="ttc_threshold" default="0.2"/>
+	<!-- Maximum acceleration of the geometric controller -->
+  	<arg name="max_acc" default="7.0"/>
+
 	<!-- State Machine -->
 	<node name="state_machine" pkg="state_machine" type="state_machine" output="screen" clear_params = "true">
-		<rosparam command="load" file="$(find state_machine)/cfg/waypoints_cfg.yaml"/>
+		<rosparam command="load" file="$(find planner)/cfg/waypoints_cfg.yaml"/>
+		<param name="wp_convergence_threshold" value="$(arg wp_convergence_threshold)" />
+		<param name="wp_stopped_threshold" value="$(arg wp_stopped_threshold)" />
+		<param name="ttc_threshold" value="$(arg ttc_threshold)" />
+		<param name="perching_type" value="$(arg perching_type)" />
     </node>
 
 	<!--- Trajectory Planner -->
 	<node name="planner" pkg="planner" type="planner" output="screen" clear_params = "true">
 		<rosparam command="load" file="$(find planner)/cfg/trajectory_config.yaml"/>
+		<rosparam command="load" file="$(find planner)/cfg/vertical_perching_config.yaml"/>
+		<rosparam command="load" file="$(find planner)/cfg/inclined_perching_config.yaml"/>
+		<param name="perching_type" value="$(arg perching_type)" />
 	</node>
 
 	<!-- Trajectory Sampler -->
@@ -37,7 +56,7 @@
 		  <!-- std::max(0.0, std::min(1.0, norm_thrust_const_ * ref_acc.dot(zb) + norm_thrust_offset_)); -->
           <param name="normalizedthrust_constant" value="0.04"/>
           <param name="normalizedthrust_offset" value="0.07"/>
-          <param name="max_acc" value="3.0" />
+		  <param name="max_acc" value="$(arg max_acc)" />
 		  <param name="Kp_x" value="10.0" />
           <param name="Kp_y" value="10.0" />
           <param name="Kp_z" value="20.0" />
