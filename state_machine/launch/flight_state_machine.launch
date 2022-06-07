@@ -8,7 +8,7 @@
 	<!-- Type of perching maneuver, 1-no perch 2-vertical 3-inclined -->
   	<arg name="perching_type" default="2"/>
 	<!-- Threshold value for time to contact, disarms and closes the arms -->
-	<arg name="ttc_threshold" default="0.2"/>
+	<arg name="ttc_threshold" default="0.25"/>
 	<!-- Maximum acceleration of the geometric controller -->
   	<arg name="max_acc" default="7.0"/>
 
