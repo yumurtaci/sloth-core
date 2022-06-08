@@ -39,13 +39,4 @@ Build the code with dependencies
 cd ~/catkin_ws
 catkin b
 ``` 
-> See [wiki](https://gitlab.lrz.de/groups/sloth/-/wikis/NVIDIA-Jetson-TX2-Setup#build-memory-issue) for **c++: internal compiler error: Segmentation fault (program cc1plus)** 
-
-Terminal 1-2-3 etc.**change**
-``` bash
-cd ~/catkin_ws
-source devel/setup.bash
-roslaunch **change**
-``` 
-
-Add starting commands for flight and px4 sitl gazebo
+> See [wiki/build memory issue](https://gitlab.lrz.de/groups/sloth/-/wikis/NVIDIA-Jetson-TX2-Setup#build-memory-issue) for **c++: internal compiler error: Segmentation fault (program cc1plus)** 
