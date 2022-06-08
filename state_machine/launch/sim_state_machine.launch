@@ -39,7 +39,7 @@
 	</node >
 
 	<!-- RVIZ -->
-	<node type="rviz" name="rviz" pkg="rviz" respawn="false" args="-d $(find planner)/launch/trajectory_config.rviz" />
+	<node type="rviz" name="rviz" pkg="rviz" respawn="false" args="-d $(find planner)/cfg/trajectory_config.rviz" />
 
 	<!-- Mavros Controllers -->
 	<!-- Iris copter in gazebo -->
