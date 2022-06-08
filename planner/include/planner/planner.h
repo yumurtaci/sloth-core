@@ -34,7 +34,8 @@ public:
     {
         WAYPOINT = 0,       // From current pose directly to an end goal
         TRAJECTORY = 1,     // Multiple waypoints from YAML file
-        PERCHING = 2,       // Parametric parabolic trajectory for perching
+        VER_PERCHING = 2,   // Perching from above, vertical
+        INC_PERCHING = 3,   // Perching from side, inclined
     };
 
     // Callback function to get the goal pose

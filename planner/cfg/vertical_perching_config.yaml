@@ -1,0 +1,65 @@
+# sets maximal velocity and acceleration values along the trajectory
+dynamic_params_vertical_perching: {
+  max_v: 3.0,
+  max_a: 2.0
+}
+
+# Provides the location of waypoints to plan trajectory through
+# (x,y)=(0,0) is center of flight arena
+# Meters, Radians
+# Do NOT put -1.0, write -1.01 instead, otherwise it removes the constraint
+# Last waypoint needs velocity and acceleration at 0!
+
+waypoints_vertical_perching: {
+  '0': {
+    pos: {
+      x: 0.0,
+      y: 0.7,
+      z: 1.8,
+      h: 1.57
+    }
+  },
+
+  '1': {
+    pos: {
+      x: 0.0,
+      y: 1.36,
+      z: 1.6,
+      h: 1.57
+    },
+  },
+
+  '2': {
+    pos: {
+      x: 0.0,
+      y: 1.36,
+      z: 1.3,
+      h: 1.57
+    },
+  },
+  
+  # Do NOT put perching point to an another index than 3 for now!!
+  '3': {
+    pos: {
+      x: 0.0,
+      y: 1.36,
+      z: 0.85,
+      h: 1.57
+    },
+    vel :{
+      x: 0.0,
+      y: 0.0,
+      z: 0.0,
+      h: 0.0
+    },
+    acc: {
+      x: 0.0,
+      y: 0.0,
+      z: 0.0,
+      h: 0.0
+    }
+  }
+}
+
+
+

@@ -29,8 +29,8 @@ BasicPlanner::BasicPlanner(ros::NodeHandle& nh) :
 
     goal_velocity_ << 0, 0, 0, 0;
     goal_acceleration_ << 0, 0, 0, 0;
-    // valid_states_ = {0, 1, 2}; ################# Change this after implementing perching
-    valid_states_ = {0, 1};
+    valid_states_ = {0, 1, 2, 3};
+    //valid_states_ = {0, 1};
     
     readParameters();
     initializePublishers();
@@ -58,39 +58,6 @@ void BasicPlanner::localvelCallback(const geometry_msgs::TwistStamped::ConstPtr 
 {
     tf::vectorMsgToEigen(msg->twist.linear, current_velocity_);
 }
-
-/*
-void BasicPlanner::plannerTriggerCallback(const std_msgs::Bool::ConstPtr& msg)
-{
-    planner_active_ = msg->data;
-    
-    bool planned;
-    bool published;
-    
-    if (planner_active_ && !planner_done_){
-
-        mav_trajectory_generation::Trajectory trajectory;
-
-        planned = planTrajectory(&trajectory);
-        published = publishTrajectory(trajectory);
-    
-        ROS_WARN_STREAM("[PLANNER] TRAJECTORY PUBLISHED");
-        planner_done_ = planned && published;
-    } 
-    //else if (!planner_active_ && planner_done_)
-    else if (planner_done_)
-    {
-        planner_done_ = false;
-        ROS_WARN_STREAM("[PLANNER] PLANNER DONE!");
-    }
-    else
-    {
-        // ROS_WARN_STREAM("[PLANNER] PLANNER WAITING ...");
-        // Waiting for the trigger IDLE for planner
-    }
-    
-}
-*/
 
 bool BasicPlanner::getActiveFlag()
 {
@@ -269,84 +236,149 @@ bool BasicPlanner::planTrajectory(mav_trajectory_generation::Trajectory* traject
       }
     break;
 
-    case BasicPlanner::PERCHING:
+    case BasicPlanner::VER_PERCHING:
     {
-        // Parametric parabola or function till perching point
-        // will be received from perception node
-        // decide if the receiveing topic should be the same as waypoint case
+        while (no_fail){
+            // std::cout<<"wp "<<i<<": preparing for import"<<std::endl;
+            std::string idx = "/"+ std::to_string(i) + "/";
+            std::string wp_str = ros::this_node::getName() + "/waypoints_vertical_perching" + idx;
+
+            // positions
+            float pos_x, pos_y, pos_z, pos_h;
+            no_fail = nh_.getParam(wp_str + "pos/x", pos_x);
+            no_fail = nh_.getParam(wp_str + "pos/y", pos_y);
+            no_fail = nh_.getParam(wp_str + "pos/z", pos_z);
+            no_fail = nh_.getParam(wp_str + "pos/h", pos_h);
+            if (!no_fail){
+                // std::cout<<"      failed to add waypoint"<<std::endl;
+                // std::cout<<"   -> ending import loop"<<std::endl;
+                // std::cout<<"      now starting to compute trajectory"<<std::endl;
+                ROS_WARN("[PLANNER] VERTICAL PERCHING, COMPUTING TRAJECTORY");
+                break;
+            }
+            pos << pos_x, pos_y, pos_z, pos_h;  // write position constraints to vector
+            // std::cout<<"      position constraints received"<<std::endl;
+            // std::cout<<"      wp pos: "<<pos_x<<" "<<pos_y<<" "<<pos_z<<" "<<pos_h<<std::endl;
+
+            // velocities
+            float vel_x, vel_y, vel_z, vel_h;
+            no_fail = nh_.getParam(wp_str + "vel/x", vel_x);
+            no_fail = nh_.getParam(wp_str + "vel/y", vel_y);
+            no_fail = nh_.getParam(wp_str + "vel/z", vel_z);
+            no_fail = nh_.getParam(wp_str + "vel/h", vel_h);
+            if (!no_fail){
+                // std::cout<<"      failed to add velocity constraint"<<std::endl;
+                // std::cout<<"      wp "<<i<<" added with position constraint only"<<std::endl;
+                // std::cout<<std::endl;
+                BasicPlanner::add_vertex(&vertices, &middle, pos);
+                no_fail = true;  // reset failure indicator for next while loop
+                i++;  // increase counter since we added the waypoint with position constraints only
+                continue;
+            }
+            vel << vel_x, vel_y, vel_z, vel_h;  // write velocity constraints to vector; we got the position at least!
+            // std::cout<<"      velocity constraints received"<<std::endl;
+            // std::cout<<"      wp vel: "<<vel_x<<" "<<vel_y<<" "<<vel_z<<" "<<vel_h<<std::endl;
+
+            // accelerations
+            float acc_x, acc_y, acc_z, acc_h;
+            no_fail = nh_.getParam(wp_str + "acc/x", acc_x);
+            no_fail = nh_.getParam(wp_str + "acc/y", acc_y);
+            no_fail = nh_.getParam(wp_str + "acc/z", acc_z);
+            no_fail = nh_.getParam(wp_str + "acc/h", acc_h);
+            if (!no_fail){
+                // std::cout<<"      failed to add acceleration constraint"<<std::endl;
+                // std::cout<<"      wp "<<i<<" added with position and velocity constraints only"<<std::endl;
+                // std::cout<<std::endl;
+                BasicPlanner::add_vertex(&vertices, &middle, pos, vel);
+                no_fail = true;  // reset failure indicator for next while loop; we got the position at least!
+                i++;  // increase counter since we added the waypoint with position and velocity constraints only
+                continue;
+            }
+            acc << acc_x, acc_y, acc_z, acc_h;  // write acceleration constraints to vector
+            // std::cout<<"      acceleration constraints received"<<std::endl;
+            // std::cout<<"      wp acc: "<<acc_x<<" "<<acc_y<<" "<<acc_z<<" "<<acc_h<<std::endl;
+            // std::cout<<"      wp "<<i<<" added with position, velocity and acceleration constraints"<<std::endl;
+            // std::cout<<std::endl;
+
+            BasicPlanner::add_vertex(&vertices, &middle, pos, vel, acc);
+            i++;  // increase counter
+        }
+
+      }
+    break;
+
+    case BasicPlanner::INC_PERCHING:
+    {
+        while (no_fail){
+            // std::cout<<"wp "<<i<<": preparing for import"<<std::endl;
+            std::string idx = "/"+ std::to_string(i) + "/";
+            std::string wp_str = ros::this_node::getName() + "/waypoints_inclined_perching" + idx;
+
+            // positions
+            float pos_x, pos_y, pos_z, pos_h;
+            no_fail = nh_.getParam(wp_str + "pos/x", pos_x);
+            no_fail = nh_.getParam(wp_str + "pos/y", pos_y);
+            no_fail = nh_.getParam(wp_str + "pos/z", pos_z);
+            no_fail = nh_.getParam(wp_str + "pos/h", pos_h);
+            if (!no_fail){
+                // std::cout<<"      failed to add waypoint"<<std::endl;
+                // std::cout<<"   -> ending import loop"<<std::endl;
+                // std::cout<<"      now starting to compute trajectory"<<std::endl;
+                ROS_WARN("[PLANNER] INCLINED PERCHING, COMPUTING TRAJECTORY");
+                break;
+            }
+            pos << pos_x, pos_y, pos_z, pos_h;  // write position constraints to vector
+            // std::cout<<"      position constraints received"<<std::endl;
+            // std::cout<<"      wp pos: "<<pos_x<<" "<<pos_y<<" "<<pos_z<<" "<<pos_h<<std::endl;
+
+            // velocities
+            float vel_x, vel_y, vel_z, vel_h;
+            no_fail = nh_.getParam(wp_str + "vel/x", vel_x);
+            no_fail = nh_.getParam(wp_str + "vel/y", vel_y);
+            no_fail = nh_.getParam(wp_str + "vel/z", vel_z);
+            no_fail = nh_.getParam(wp_str + "vel/h", vel_h);
+            if (!no_fail){
+                // std::cout<<"      failed to add velocity constraint"<<std::endl;
+                // std::cout<<"      wp "<<i<<" added with position constraint only"<<std::endl;
+                // std::cout<<std::endl;
+                BasicPlanner::add_vertex(&vertices, &middle, pos);
+                no_fail = true;  // reset failure indicator for next while loop
+                i++;  // increase counter since we added the waypoint with position constraints only
+                continue;
+            }
+            vel << vel_x, vel_y, vel_z, vel_h;  // write velocity constraints to vector; we got the position at least!
+            // std::cout<<"      velocity constraints received"<<std::endl;
+            // std::cout<<"      wp vel: "<<vel_x<<" "<<vel_y<<" "<<vel_z<<" "<<vel_h<<std::endl;
+
+            // accelerations
+            float acc_x, acc_y, acc_z, acc_h;
+            no_fail = nh_.getParam(wp_str + "acc/x", acc_x);
+            no_fail = nh_.getParam(wp_str + "acc/y", acc_y);
+            no_fail = nh_.getParam(wp_str + "acc/z", acc_z);
+            no_fail = nh_.getParam(wp_str + "acc/h", acc_h);
+            if (!no_fail){
+                // std::cout<<"      failed to add acceleration constraint"<<std::endl;
+                // std::cout<<"      wp "<<i<<" added with position and velocity constraints only"<<std::endl;
+                // std::cout<<std::endl;
+                BasicPlanner::add_vertex(&vertices, &middle, pos, vel);
+                no_fail = true;  // reset failure indicator for next while loop; we got the position at least!
+                i++;  // increase counter since we added the waypoint with position and velocity constraints only
+                continue;
+            }
+            acc << acc_x, acc_y, acc_z, acc_h;  // write acceleration constraints to vector
+            // std::cout<<"      acceleration constraints received"<<std::endl;
+            // std::cout<<"      wp acc: "<<acc_x<<" "<<acc_y<<" "<<acc_z<<" "<<acc_h<<std::endl;
+            // std::cout<<"      wp "<<i<<" added with position, velocity and acceleration constraints"<<std::endl;
+            // std::cout<<std::endl;
+
+            BasicPlanner::add_vertex(&vertices, &middle, pos, vel, acc);
+            i++;  // increase counter
+        }
 
       }
     break;
 
     }
-
-    
-    /*
-    while (no_fail){
-        std::cout<<"wp "<<i<<": preparing for import"<<std::endl;
-        std::string idx = "/"+ std::to_string(i) + "/";
-        std::string wp_str = ros::this_node::getName() + "/waypoints" + idx;
-
-        // positions
-        float pos_x, pos_y, pos_z, pos_h;
-        no_fail = nh_.getParam(wp_str + "pos/x", pos_x);
-        no_fail = nh_.getParam(wp_str + "pos/y", pos_y);
-        no_fail = nh_.getParam(wp_str + "pos/z", pos_z);
-        no_fail = nh_.getParam(wp_str + "pos/h", pos_h);
-        if (!no_fail){
-            std::cout<<"      failed to add waypoint"<<std::endl;
-            std::cout<<"   -> ending import loop"<<std::endl;
-            std::cout<<"      now starting to compute trajectory"<<std::endl;
-            break;
-        }
-        pos << pos_x, pos_y, pos_z, pos_h;  // write position constraints to vector
-        std::cout<<"      position constraints received"<<std::endl;
-        std::cout<<"      wp pos: "<<pos_x<<" "<<pos_y<<" "<<pos_z<<" "<<pos_h<<std::endl;
-
-        // velocities
-        float vel_x, vel_y, vel_z, vel_h;
-        no_fail = nh_.getParam(wp_str + "vel/x", vel_x);
-        no_fail = nh_.getParam(wp_str + "vel/y", vel_y);
-        no_fail = nh_.getParam(wp_str + "vel/z", vel_z);
-        no_fail = nh_.getParam(wp_str + "vel/h", vel_h);
-        if (!no_fail){
-            std::cout<<"      failed to add velocity constraint"<<std::endl;
-            std::cout<<"      wp "<<i<<" added with position constraint only"<<std::endl;
-            std::cout<<std::endl;
-            BasicPlanner::add_vertex(&vertices, &middle, pos);
-            no_fail = true;  // reset failure indicator for next while loop
-            i++;  // increase counter since we added the waypoint with position constraints only
-            continue;
-        }
-        vel << vel_x, vel_y, vel_z, vel_h;  // write velocity constraints to vector; we got the position at least!
-        std::cout<<"      velocity constraints received"<<std::endl;
-        std::cout<<"      wp vel: "<<vel_x<<" "<<vel_y<<" "<<vel_z<<" "<<vel_h<<std::endl;
-
-        // accelerations
-        float acc_x, acc_y, acc_z, acc_h;
-        no_fail = nh_.getParam(wp_str + "acc/x", acc_x);
-        no_fail = nh_.getParam(wp_str + "acc/y", acc_y);
-        no_fail = nh_.getParam(wp_str + "acc/z", acc_z);
-        no_fail = nh_.getParam(wp_str + "acc/h", acc_h);
-        if (!no_fail){
-            std::cout<<"      failed to add acceleration constraint"<<std::endl;
-            std::cout<<"      wp "<<i<<" added with position and velocity constraints only"<<std::endl;
-            std::cout<<std::endl;
-            BasicPlanner::add_vertex(&vertices, &middle, pos, vel);
-            no_fail = true;  // reset failure indicator for next while loop; we got the position at least!
-            i++;  // increase counter since we added the waypoint with position and velocity constraints only
-            continue;
-        }
-        acc << acc_x, acc_y, acc_z, acc_h;  // write acceleration constraints to vector
-        std::cout<<"      acceleration constraints received"<<std::endl;
-        std::cout<<"      wp acc: "<<acc_x<<" "<<acc_y<<" "<<acc_z<<" "<<acc_h<<std::endl;
-        std::cout<<"      wp "<<i<<" added with position, velocity and acceleration constraints"<<std::endl;
-        std::cout<<std::endl;
-
-        BasicPlanner::add_vertex(&vertices, &middle, pos, vel, acc);
-        i++;  // increase counter
-    }
-    */
 
     /******* Estimate initial segment times *******/
     std::vector<double> segment_times;
