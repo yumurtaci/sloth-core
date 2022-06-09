@@ -3,8 +3,8 @@
 	
 	<!-- Parameters -->
 	<arg name="fcu_url" default="/dev/ttyACM0:921600" />
-	<!-- arg name="gcs_url" default="udp://@192.168.0.108" / -->
-	<arg name="gcs_url" default="udp://@192.168.0.226" />
+	<arg name="gcs_url" default="udp://@192.168.0.108" />
+	<!-- arg name="gcs_url" default="udp://@192.168.0.226" / -->
 	<arg name="tgt_system" default="1" />
 	<arg name="tgt_component" default="1" />
 	<arg name="log_output" default="screen" />
