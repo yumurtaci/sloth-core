@@ -15,7 +15,7 @@ waypoints_vertical_perching: {
     pos: {
       x: 0.0,
       y: 0.7,
-      z: 1.8,
+      z: 2.7, #1.8,
       h: 1.57
     }
   },
@@ -23,8 +23,8 @@ waypoints_vertical_perching: {
   '1': {
     pos: {
       x: 0.0,
-      y: 1.36,
-      z: 1.6,
+      y: 2.32, #1.36,
+      z: 2.5, #1.6,
       h: 1.57
     },
   },
@@ -32,8 +32,8 @@ waypoints_vertical_perching: {
   '2': {
     pos: {
       x: 0.0,
-      y: 1.36,
-      z: 1.3,
+      y: 2.32, #1.36,
+      z: 2.2, #1.3,
       h: 1.57
     },
   },
@@ -42,8 +42,8 @@ waypoints_vertical_perching: {
   '3': {
     pos: {
       x: 0.0,
-      y: 1.36,
-      z: 0.85,
+      y: 2.32, #1.36,
+      z: 1.68, #0.85,
       h: 1.57
     },
     vel :{

@@ -10,9 +10,10 @@
 	<!-- Waypoint stop threshold, absolute velocity in 3D space -->
 	<arg name="wp_stopped_threshold" default="0.2"/>
 	<!-- Type of perching maneuver, 1-no perch 2-vertical 3-inclined -->
-  	<arg name="perching_type" default="2"/>
+  	<arg name="perching_type" default="3"/>
 	<!-- Threshold value for time to contact, disarms and closes the arms -->
-	<arg name="ttc_threshold" default="0.25"/>
+	<arg name="ttc_threshold_ver" default="0.25"/>
+	<arg name="ttc_threshold_inc" default="0.15"/>
 	<!-- Maximum acceleration of the geometric controller -->
   	<arg name="max_acc" default="7.0"/>
 	
@@ -21,7 +22,8 @@
 		<rosparam command="load" file="$(find planner)/cfg/waypoints_cfg.yaml"/>
 		<param name="wp_convergence_threshold" value="$(arg wp_convergence_threshold)" />
 		<param name="wp_stopped_threshold" value="$(arg wp_stopped_threshold)" />
-		<param name="ttc_threshold" value="$(arg ttc_threshold)" />
+		<param name="ttc_threshold_ver" value="$(arg ttc_threshold_ver)" />
+		<param name="ttc_threshold_inc" value="$(arg ttc_threshold_inc)" />
 		<param name="perching_type" value="$(arg perching_type)" />
     </node>
 

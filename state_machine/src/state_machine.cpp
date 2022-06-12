@@ -356,8 +356,10 @@ namespace statemachine
       // 2: vertical perching, 3: inclined perching
       if (perching_type_ == 2){
         timeToContact_msg_.data = timeToContact(current_pose_, ver_perch_pose_);
+        ttc_threshold_ = ttc_threshold_ver_;
       } else if (perching_type_ == 3){
         timeToContact_msg_.data = timeToContact(current_pose_, inc_perch_pose_);
+        ttc_threshold_ = ttc_threshold_inc_;
       }
       
       // For visualization
@@ -688,7 +690,8 @@ namespace statemachine
     // Perching configuration
 
     // Time to contact
-    nh_.getParam(ros::this_node::getName() + "/ttc_threshold", ttc_threshold_);
+    nh_.getParam(ros::this_node::getName() + "/ttc_threshold_ver", ttc_threshold_ver_);
+    nh_.getParam(ros::this_node::getName() + "/ttc_threshold_inc", ttc_threshold_inc_);
 
     // Read vertical perching pose
     nh_.getParam("/planner/waypoints_vertical_perching/3/pos/x", ver_perch_pose_.pose.position.x);
@@ -696,9 +699,9 @@ namespace statemachine
     nh_.getParam("/planner/waypoints_vertical_perching/3/pos/z", ver_perch_pose_.pose.position.z);
 
     // Read vertical perching pose
-    nh_.getParam("/planner/waypoints_inclined_perching/1/pos/x", inc_perch_pose_.pose.position.x);
-    nh_.getParam("/planner/waypoints_inclined_perching/1/pos/y", inc_perch_pose_.pose.position.y);
-    nh_.getParam("/planner/waypoints_inclined_perching/1/pos/z", inc_perch_pose_.pose.position.z);
+    nh_.getParam("/planner/waypoints_inclined_perching/0/pos/x", inc_perch_pose_.pose.position.x);
+    nh_.getParam("/planner/waypoints_inclined_perching/0/pos/y", inc_perch_pose_.pose.position.y);
+    nh_.getParam("/planner/waypoints_inclined_perching/0/pos/z", inc_perch_pose_.pose.position.z);
 
     // Get the perching type
     nh_.getParam(ros::this_node::getName() + "/perching_type", perching_type_);

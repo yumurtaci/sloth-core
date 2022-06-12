@@ -117,9 +117,11 @@ namespace statemachine
     int current_wp_;                            // Current waypoint index
     int perching_type_;                         // Vertical or inclined perching
 
-    double ttc_threshold_;                      // Time to contact threshold for perching
+    double ttc_threshold_;                  // Time to contact threshold
+    double ttc_threshold_ver_;                  // Time to contact threshold for vertical perching
+    double ttc_threshold_inc_;                  // Time to contact threshold for inclined perching
     double wp_converged_threshold_;             // Waypoint threshold for absolute distance in 3D space
-    double wp_stopped_threshold_;              // Waypoint threshold for absolute velocity in 3D space 
+    double wp_stopped_threshold_;               // Waypoint threshold for absolute velocity in 3D space 
 
     ros::Rate rate_ = 20;                       // Loop rate
     

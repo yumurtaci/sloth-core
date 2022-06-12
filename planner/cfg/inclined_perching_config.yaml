@@ -11,29 +11,33 @@ dynamic_params_inclined_perching: {
 # Last waypoint needs velocity and acceleration at 0!
 
 waypoints_inclined_perching: {
+  # Do NOT put perching point to an another index than 0 for now!!
   '0': {
     pos: {
       x: 0.0,
-      y: -1.01,
-      z: 2.2,
+      y: 2.32,
+      z: 1.68,
       h: 1.57
+    },
+    vel :{
+      x: 0.0,
+      y: 0.0,
+      z: 0.0,
+      h: 0.0
+    },
+    acc: {
+      x: 0.0,
+      y: -7.0,
+      z: 0.0,
+      h: 0.0
     }
   },
-  # Do NOT put perching point to an another index than 1 for now!!
+
   '1': {
     pos: {
       x: 0.0,
-      y: 3.0,
-      z: 2.0,
-      h: 1.57
-    },
-  },
-
-  '2': {
-    pos: {
-      x: 0.0,
-      y: -2.0,
-      z: 2.0,
+      y: -2.01,
+      z: 1.68,
       h: 1.57
     },
     vel :{
@@ -50,3 +54,44 @@ waypoints_inclined_perching: {
     }
   }
 }
+
+# {
+#   '0': {
+#     pos: {
+#       x: 0.0,
+#       y: -1.01,
+#       z: 2.2,
+#       h: 1.57
+#     }
+#   },
+#   # Do NOT put perching point to an another index than 1 for now!!
+#   '1': {
+#     pos: {
+#       x: 0.0,
+#       y: 3.0,
+#       z: 2.0,
+#       h: 1.57
+#     },
+#   },
+
+#   '2': {
+#     pos: {
+#       x: 0.0,
+#       y: -2.0,
+#       z: 2.0,
+#       h: 1.57
+#     },
+#     vel :{
+#       x: 0.0,
+#       y: 0.0,
+#       z: 0.0,
+#       h: 0.0
+#     },
+#     acc: {
+#       x: 0.0,
+#       y: 0.0,
+#       z: 0.0,
+#       h: 0.0
+#     }
+#   }
+# }
