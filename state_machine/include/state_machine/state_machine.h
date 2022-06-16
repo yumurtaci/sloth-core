@@ -130,9 +130,9 @@ namespace statemachine
     ros::Publisher rpy_pub_;                    // Roll, pitch and yaw publisher
     ros::Publisher local_pos_pub_;              // Desired Position & Orientation
     ros::Publisher timeToContact_pub_;          // Time to contact publisher
-    ros::Publisher actuator_control_pub_;       // Actuator control for servos 
+    ros::Publisher perching_pose_pub_;          // Publish the perching target for data analysis
+    ros::Publisher actuator_control_pub_;       // Actuator control for servos     
     ros::Publisher controller_trigger_pub_;     // Trigger for geometric controller
-    
     
     ros::Subscriber state_sub_;                 // FCU state subscriber
     ros::Subscriber local_pos_pose_sub_;        // Position & Orientation

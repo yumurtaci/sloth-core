@@ -357,9 +357,11 @@ namespace statemachine
       if (perching_type_ == 2){
         timeToContact_msg_.data = timeToContact(current_pose_, ver_perch_pose_);
         ttc_threshold_ = ttc_threshold_ver_;
+        perching_pose_pub_.publish(ver_perch_pose_);
       } else if (perching_type_ == 3){
         timeToContact_msg_.data = timeToContact(current_pose_, inc_perch_pose_);
         ttc_threshold_ = ttc_threshold_inc_;
+        perching_pose_pub_.publish(inc_perch_pose_);
       }
       
       // For visualization
@@ -600,6 +602,8 @@ namespace statemachine
             ("quadrotor/TTC", 1);
     actuator_control_pub_ = nh_.advertise<std_msgs::Int32>
             ("actuator_control/state", 1);
+    perching_pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>
+            ("quadrotor/PerchingPose", 1);
   }
 
   void StateMachine::initializeSubscribers()
