@@ -24,7 +24,7 @@ Clone the repository
 ``` bash
 cd ~/catkin_ws/src
 wstool init
-git clone git@gitlab.lrz.de:sloth/sloth-core.git
+git clone https://github.com/yumurtaci/sloth-core
 ``` 
 
 Install the dependencies 
