@@ -39,4 +39,4 @@ Build the code with dependencies
 cd ~/catkin_ws
 catkin b
 ``` 
-> See [wiki/build memory issue](https://gitlab.lrz.de/groups/sloth/-/wikis/NVIDIA-Jetson-TX2-Setup#build-memory-issue) for **c++: internal compiler error: Segmentation fault (program cc1plus)** 
+> See [wiki/build memory issue](https://github.com/yumurtaci/sloth-core/wiki/NVIDIA-Jetson-TX2-Setup#build-memory-issue) for **c++: internal compiler error: Segmentation fault (program cc1plus)** 
