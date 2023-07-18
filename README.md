@@ -39,4 +39,21 @@ Build the code with dependencies
 cd ~/catkin_ws
 catkin b
 ``` 
-> See [wiki/build memory issue](https://github.com/yumurtaci/sloth-core/wiki/NVIDIA-Jetson-TX2-Setup#build-memory-issue) for **c++: internal compiler error: Segmentation fault (program cc1plus)** 
+> See [wiki/build memory issue](https://github.com/yumurtaci/sloth-core/wiki/NVIDIA-Jetson-TX2-Setup#build-memory-issue) for **c++: internal compiler error: Segmentation fault (program cc1plus)**
+
+
+## Citation
+In case you use this work as an academic context, please cite as the following.
+
+```
+@misc{yumurtaci_batuhan_sloth,
+  author       = {Batuhan Yumurtaci},
+  title        = {{Vision-Aided Learning Based Perching for a Bioinspired Metamorphic Multirotor}},
+  howpublished = {\url{https://github.com/yumurtaci/sloth-core}},
+  month        = oct,
+  year         = 2022,
+  }
+```
+
+
+
